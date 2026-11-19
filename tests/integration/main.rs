@@ -2,4 +2,5 @@
 //! alphabetized.
 
 pub mod conventions;
+pub mod log;
 pub mod smoke;

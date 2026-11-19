@@ -37,7 +37,13 @@ macro_rules! serde_serialize_only {
 
 // Later plans append here as they add public types, for example
 // `tinytex::CompileRequest` (plan 5.4a) and `tinytex::CompileError` (below).
-serde_both!(tinytex::ErrorCode);
+serde_both!(
+    tinytex::ErrorCode,
+    tinytex::log::AccessibilityWarnings,
+    tinytex::log::Hint,
+    tinytex::log::LatexError,
+    tinytex::log::SearchTerm,
+);
 serde_serialize_only!();
 
 #[test]

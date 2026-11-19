@@ -15,6 +15,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod log;
+
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
