@@ -2,6 +2,11 @@
 //! alphabetized.
 
 pub mod command;
+pub mod compile_errors;
+pub mod compile_latexmk;
+pub mod compile_loop;
+pub mod compile_support;
+pub mod compile_types;
 pub mod config;
 pub mod conventions;
 pub mod detect;

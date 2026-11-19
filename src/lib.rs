@@ -15,6 +15,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod compile;
 pub mod config;
 pub mod detect;
 pub mod exec;
@@ -24,6 +25,10 @@ pub mod log;
 pub mod test_support;
 pub mod tlmgr;
 
+pub use compile::{
+    Bib, Clean, CompileError, CompileRequest, Compiled, Compiler, Diagnostics, Driver, Engine,
+    IndexEngine, KeepLog, OnBibFailure, Output, Recover, ToolPaths,
+};
 pub use config::{Config, Prefer, TlmgrUpdate};
 pub use detect::{Distribution, Kind};
 pub use exec::{CommandSpec, Event, Exec, NullObserver, Observer, StdExec};

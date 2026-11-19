@@ -98,6 +98,20 @@ pub struct LatexError {
     pub hints: Vec<Hint>,
 }
 
+/// Why a package install failed: Quarto 1 tells these apart (`pdf.ts:483,490,498`,
+/// `texlive.ts:392-399`) and the host words each differently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum InstallFailure {
+    /// `tlmgr search` found no package for what the log asks for.
+    NoMatch,
+    /// `tlmgr install` failed, or left a package missing.
+    InstallFailed,
+    /// The local TeX Live is older than the remote repository.
+    TexLiveTooOld,
+}
+
 /// The accessibility (PDF/UA) warnings of a run, Quarto 1's shape
 /// (`parse-error.ts`, `PdfAccessibilityWarnings`). The caller words them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
