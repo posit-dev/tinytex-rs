@@ -383,6 +383,10 @@ pub struct Config {
     pub prevent_install: bool,                    // TINYTEX_PREVENT_INSTALL (M5); environment only
     pub tlmgr_update: TlmgrUpdate,                // `--tlmgr-update`
     pub prefer: Prefer,                           // `--prefer`; Q1's `latex-tinytex`
+    pub tlmgr_path: Option<PathBuf>,              // R's `tinytex.tlmgr.path`; `--tlmgr-path`; wins over `prefer`
+    pub usermode: bool,                           // R's `usermode`; `--usermode`
+    pub delete_tlpdb: bool,                       // R's `delete_tlpdb`; `--delete-tlpdb`
+    pub verbose: bool,                            // `--verbose`
 }
 /// `Auto`: update lazily, at most once per process and distribution (§2, §3.2). `Never`: skip the
 /// on-failure and the pre-install update (R\'s `tinytex.tlmgr_update = FALSE`, extended to both).
