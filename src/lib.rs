@@ -1,18 +1,4 @@
-//! Blocking driver for TeX Live and TinyTeX.
-//!
-//! The crate has no async runtime and no dependency on any Quarto crate. It is
-//! being built milestone by milestone; see `docs/design.md`.
-//!
-//! # Conventions
-//!
-//! * Every public request, config, event and result type derives `Serialize`
-//!   and `Deserialize`. Error types that wrap an `io::Error` derive
-//!   `Serialize` only (the impl is hand-written).
-//! * Every error carries a stable string [`ErrorCode`] that non-Rust hosts can
-//!   switch on.
-//! * Observer events carry the data, and a `Display` text, a host needs to
-//!   render its own messages.
-
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
 pub mod compile;

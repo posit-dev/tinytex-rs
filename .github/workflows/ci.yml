@@ -25,6 +25,8 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo nextest run --all-features
+      # nextest does not run doc tests; the README example is one.
+      - run: cargo test --doc --all-features
 
   # q2 compiles this crate with its pinned nightly (rust-toolchain.toml in
   # quarto-dev/q2), so a stable-only crate could break there.

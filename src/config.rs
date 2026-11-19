@@ -15,7 +15,9 @@ use serde::{Deserialize, Serialize};
 #[non_exhaustive]
 pub enum TlmgrUpdate {
     #[default]
+    /// Update lazily.
     Auto,
+    /// Never update.
     Never,
 }
 
@@ -27,7 +29,9 @@ pub enum TlmgrUpdate {
 #[non_exhaustive]
 pub enum Prefer {
     #[default]
+    /// Look for TinyTeX first.
     TinyTeX,
+    /// Use the TeX Live on `PATH`.
     System,
 }
 
@@ -35,15 +39,25 @@ pub enum Prefer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct Config {
+    /// Where TinyTeX is (or is to be) installed.
     pub install_dir: Option<PathBuf>,
+    /// The CTAN repository `tlmgr` uses.
     pub repository: Option<String>,
+    /// Extra options for every `tlmgr` call.
     pub tlmgr_opts: Vec<String>,
+    /// Never install packages.
     pub prevent_install: bool,
+    /// When `tlmgr` updates itself and the packages.
     pub tlmgr_update: TlmgrUpdate,
+    /// Which distribution to prefer.
     pub prefer: Prefer,
+    /// The `tlmgr` program, when not found next to the engines.
     pub tlmgr_path: Option<PathBuf>,
+    /// Run `tlmgr` in user mode.
     pub usermode: bool,
+    /// Delete the `texlive.tlpdb.<md5>` copies under `tlpkg` after an update.
     pub delete_tlpdb: bool,
+    /// Report more detail through the observer.
     pub verbose: bool,
 }
 

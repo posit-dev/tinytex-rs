@@ -45,10 +45,15 @@ pub(crate) const DEFAULT_MAX_RUNS: u32 = 10;
 #[non_exhaustive]
 pub enum Engine {
     #[default]
+    /// `pdflatex`, the default.
     PdfLatex,
+    /// `xelatex`.
     XeLatex,
+    /// `lualatex`.
     LuaLatex,
+    /// `latexmk` as the per-pass engine, or as the whole driver (see the type docs).
     Latexmk,
+    /// `tectonic`, which runs its own rerun loop.
     Tectonic,
 }
 
@@ -72,9 +77,13 @@ impl Engine {
 #[non_exhaustive]
 pub enum Bib {
     #[default]
+    /// `biber` when a `.bcf` file exists, else `bibtex` when the `.aux` file asks for it.
     Infer,
+    /// Always run `bibtex`.
     Bibtex,
+    /// Always run `biber`.
     Biber,
+    /// Run no bibliography tool (the host resolves citations itself).
     Skip,
 }
 
@@ -87,6 +96,7 @@ pub enum Bib {
 #[non_exhaustive]
 pub enum Driver {
     #[default]
+    /// This crate's own rerun loop.
     Builtin,
     Latexmk,
 }
@@ -98,7 +108,9 @@ pub enum Driver {
 #[non_exhaustive]
 pub enum Recover {
     #[default]
+    /// Install missing packages after a failed first run only.
     FirstRun,
+    /// Install missing packages after a failure of any run.
     EveryRun,
 }
 
@@ -110,7 +122,9 @@ pub enum Recover {
 #[non_exhaustive]
 pub enum OnBibFailure {
     #[default]
+    /// Fail the compile.
     Error,
+    /// Record the failure in diagnostics and continue.
     Warn,
 }
 
@@ -119,9 +133,12 @@ pub enum OnBibFailure {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum Clean {
+    /// Leave every auxiliary file in place.
     Never,
+    /// Clean up only after a successful compile.
     OnSuccess,
     #[default]
+    /// Clean up after every compile, successful or not.
     Always,
 }
 
@@ -130,8 +147,10 @@ pub enum Clean {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum KeepLog {
+    /// Keep the log only when the compile failed.
     OnFailure,
     #[default]
+    /// Keep the log when the compile failed or produced warnings.
     OnWarnings,
     Always,
     Never,
@@ -143,13 +162,16 @@ pub enum KeepLog {
 #[non_exhaustive]
 pub enum Output {
     #[default]
+    /// A PDF file.
     Pdf,
 }
 
 /// The index tool: `command` with `args`, then the `.idx` file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexEngine {
+    /// The program to run.
     pub command: String,
+    /// Arguments placed before the `.idx` file name.
     pub args: Vec<String>,
 }
 
@@ -157,11 +179,17 @@ pub struct IndexEngine {
 /// struct, then the distribution's `bin_dir`, then `PATH`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolPaths {
+    /// The engine program.
     pub engine: Option<PathBuf>,
+    /// `bibtex`.
     pub bibtex: Option<PathBuf>,
+    /// `biber`.
     pub biber: Option<PathBuf>,
+    /// `makeindex`.
     pub makeindex: Option<PathBuf>,
+    /// `latexmk`.
     pub latexmk: Option<PathBuf>,
+    /// `tectonic`.
     pub tectonic: Option<PathBuf>,
 }
 
@@ -174,27 +202,40 @@ pub struct ToolPaths {
 #[serde(default)]
 #[non_exhaustive]
 pub struct CompileRequest {
+    /// The TeX engine.
     pub engine: Engine,
+    /// Who runs the engine repeatedly.
     pub driver: Driver,
+    /// Extra engine arguments, placed after the crate's own.
     pub engine_args: Vec<String>,
+    /// The bibliography tool.
     pub bib: Bib,
     /// `None` is `makeindex` with no options. The index pass runs whenever
     /// the first run left an `.idx` file; there is no way to skip it.
     pub index: Option<IndexEngine>,
     /// Total engine runs, first included.
     pub min_runs: u32,
+    /// Upper bound on total engine runs.
     pub max_runs: u32,
     /// `-output-directory`, relative to the `.tex` directory.
     pub output_dir: Option<PathBuf>,
+    /// Name of the output file, when it is not `<stem>.pdf`.
     pub pdf_file: Option<PathBuf>,
     /// `TEXINPUTS` and `BSTINPUTS`.
     pub input_paths: Vec<PathBuf>,
+    /// Tool location overrides.
     pub tools: ToolPaths,
+    /// Install missing LaTeX packages with `tlmgr` and retry.
     pub auto_install: bool,
+    /// When package recovery runs.
     pub recover: Recover,
+    /// What a failing bibliography tool does.
     pub on_bib_failure: OnBibFailure,
+    /// When auxiliary files are removed.
     pub clean: Clean,
+    /// When the log survives the cleanup.
     pub keep_log: KeepLog,
+    /// The kind of output file.
     pub output: Output,
 }
 
@@ -227,22 +268,27 @@ impl CompileRequest {
     pub fn new() -> Self {
         Self::default()
     }
+    /// Sets [`CompileRequest::engine`].
     pub fn engine(mut self, e: Engine) -> Self {
         self.engine = e;
         self
     }
+    /// Sets [`CompileRequest::driver`].
     pub fn driver(mut self, d: Driver) -> Self {
         self.driver = d;
         self
     }
+    /// Sets [`CompileRequest::engine_args`].
     pub fn engine_args(mut self, a: Vec<String>) -> Self {
         self.engine_args = a;
         self
     }
+    /// Sets [`CompileRequest::bib`].
     pub fn bib(mut self, b: Bib) -> Self {
         self.bib = b;
         self
     }
+    /// Sets [`CompileRequest::index`].
     pub fn index(mut self, i: IndexEngine) -> Self {
         self.index = Some(i);
         self
@@ -258,42 +304,52 @@ impl CompileRequest {
     pub fn reruns(self, min: u32, max: u32) -> Self {
         self.runs(min.saturating_add(1), max.saturating_add(1))
     }
+    /// Sets [`CompileRequest::output_dir`].
     pub fn output_dir(mut self, d: PathBuf) -> Self {
         self.output_dir = Some(d);
         self
     }
+    /// Sets [`CompileRequest::pdf_file`].
     pub fn pdf_file(mut self, p: PathBuf) -> Self {
         self.pdf_file = Some(p);
         self
     }
+    /// Sets [`CompileRequest::input_paths`].
     pub fn input_paths(mut self, d: Vec<PathBuf>) -> Self {
         self.input_paths = d;
         self
     }
+    /// Sets [`CompileRequest::tools`].
     pub fn tools(mut self, t: ToolPaths) -> Self {
         self.tools = t;
         self
     }
+    /// Sets [`CompileRequest::auto_install`].
     pub fn auto_install(mut self, on: bool) -> Self {
         self.auto_install = on;
         self
     }
+    /// Sets [`CompileRequest::recover`].
     pub fn recover(mut self, r: Recover) -> Self {
         self.recover = r;
         self
     }
+    /// Sets [`CompileRequest::on_bib_failure`].
     pub fn on_bib_failure(mut self, f: OnBibFailure) -> Self {
         self.on_bib_failure = f;
         self
     }
+    /// Sets [`CompileRequest::clean`].
     pub fn clean(mut self, c: Clean) -> Self {
         self.clean = c;
         self
     }
+    /// Sets [`CompileRequest::keep_log`].
     pub fn keep_log(mut self, k: KeepLog) -> Self {
         self.keep_log = k;
         self
     }
+    /// Sets [`CompileRequest::output`].
     pub fn output(mut self, o: Output) -> Self {
         self.output = o;
         self
