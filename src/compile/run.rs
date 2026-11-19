@@ -7,6 +7,7 @@
 //! an `Err`, a non-zero exit or a command that changes the installation,
 //! `interrupted()` is tested first and wins.
 
+use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -15,26 +16,32 @@ use std::process::Output;
 use crate::config::Config;
 use crate::detect::Distribution;
 use crate::exec::{CommandSpec, Event, Exec, Observer};
-use crate::log::{self, InstallFailure};
+use crate::log::{self, InstallFailure, SearchTerm};
 use crate::tlmgr::{InstallOutcome, Tlmgr, TlmgrError};
 
+use super::place::{aux_files, move_file, tweak_aux};
 use super::{
-    Bib, CompileError, CompileRequest, Compiled, Diagnostics, Driver, Engine, OnBibFailure, Recover,
+    Bib, Clean, CompileError, CompileRequest, Compiled, Diagnostics, Driver, Engine, KeepLog,
+    OnBibFailure, Recover,
 };
 
 pub(super) fn compile(
     dist: Option<&Distribution>,
     cfg: &Config,
+    windows: bool,
     tex: &Path,
     req: &CompileRequest,
     x: &dyn Exec,
     o: &dyn Observer,
 ) -> Result<Compiled, CompileError> {
     let mut s = Session::new(dist, cfg, tex, req, x, o)?;
-    match req.driver {
-        Driver::Builtin => s.builtin(),
-        Driver::Latexmk => s.latexmk(),
-    }
+    s.windows = windows;
+    let result = match (req.driver, req.engine) {
+        (Driver::Builtin, Engine::Tectonic) => s.tectonic(),
+        (Driver::Builtin, _) => s.builtin(),
+        (Driver::Latexmk, _) => s.latexmk(),
+    };
+    s.finish(result)
 }
 
 /// The result of one engine run.
@@ -74,6 +81,37 @@ struct Session<'a> {
     installed: Vec<String>,
     last_attempt: Vec<String>,
     diag: Diagnostics,
+    windows: bool,
+    /// The auxiliary files that existed before the run (after the stale log
+    /// and output were removed); `None` until the run starts, so a request
+    /// rejected up front touches nothing.
+    before: Option<BTreeSet<String>>,
+}
+
+/// The flags that already choose the output format of `latexmk` (Quarto 1's
+/// `kLatexMkEngineFlags`, `latex.ts:43-50` at `v1.12.3`).
+const LATEXMK_FORMAT_FLAGS: &[&str] = &["-pdf", "-pdfdvi", "-pdfps", "-pdflua", "-pdfxe", "-pdf-"];
+
+/// The package that provides a command, when the search names none
+/// (`packagesForCommand`, `latex.ts:292-298`).
+fn package_for_command(tool: &str) -> String {
+    match tool {
+        "texindy" => "xindy".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+/// `dir/name`, or on Windows `dir/name` with an executable extension, when
+/// the file exists.
+fn find_in_bin(dir: &Path, name: &str) -> Option<PathBuf> {
+    let exts: &[&str] = if cfg!(windows) {
+        &["", ".exe", ".bat", ".cmd"]
+    } else {
+        &[""]
+    };
+    exts.iter()
+        .map(|e| dir.join(format!("{name}{e}")))
+        .find(|p| p.is_file())
 }
 
 fn text(bytes: &[u8]) -> String {
@@ -152,6 +190,8 @@ impl<'a> Session<'a> {
             installed: Vec::new(),
             last_attempt: Vec::new(),
             diag: Diagnostics::default(),
+            windows: cfg!(windows),
+            before: None,
         })
     }
 
@@ -174,27 +214,53 @@ impl<'a> Session<'a> {
         std::fs::read(path).ok().map(|b| text(&b))
     }
 
-    fn tool(&self, name: &str, override_path: &Option<PathBuf>) -> CommandSpec {
+    /// A command for `name`: `override_path` first (a path that does not
+    /// exist is `EngineNotFound`, never a fall-through), then the
+    /// distribution's `bin_dir`, then the bare name for `PATH` (which has
+    /// `bin_dir` in front). `input_paths` become `TEXINPUTS` and `BSTINPUTS`.
+    fn tool(
+        &self,
+        name: &str,
+        override_path: &Option<PathBuf>,
+    ) -> Result<CommandSpec, CompileError> {
         let mut spec = match self.dist {
             Some(d) => d.command(name),
             None => CommandSpec::new(name),
         };
-        if let Some(p) = override_path {
-            spec.program = p.clone();
+        match override_path {
+            Some(p) if !p.exists() => {
+                return Err(CompileError::EngineNotFound {
+                    tool: name.to_owned(),
+                });
+            }
+            Some(p) => spec.program = p.clone(),
+            None => {
+                spec.program = self
+                    .dist
+                    .and_then(|d| find_in_bin(&d.bin_dir, name))
+                    .unwrap_or_else(|| PathBuf::from(name));
+            }
         }
         spec.cwd = Some(self.dir.clone());
-        spec
+        if !self.req.input_paths.is_empty() {
+            let mut value = OsString::new();
+            for p in &self.req.input_paths {
+                value.push(p);
+                value.push(";");
+            }
+            spec.env.push(("TEXINPUTS".into(), value.clone()));
+            spec.env.push(("BSTINPUTS".into(), value));
+        }
+        Ok(spec)
     }
 
     fn engine_program(&self) -> Result<&'static str, CompileError> {
         match self.req.engine {
-            Engine::PdfLatex | Engine::XeLatex | Engine::LuaLatex => Ok(self.req.engine.program()),
-            // Plan 5.4b adds the `tectonic` and `latexmk` per-pass engines.
-            other => Err(CompileError::InvalidRequest {
-                message: format!(
-                    "the `{}` engine is not supported by the built-in loop",
-                    other.program()
-                ),
+            Engine::PdfLatex | Engine::XeLatex | Engine::LuaLatex | Engine::Latexmk => {
+                Ok(self.req.engine.program())
+            }
+            Engine::Tectonic => Err(CompileError::InvalidRequest {
+                message: "`tectonic` does not take part in the rerun loop".to_owned(),
             }),
         }
     }
@@ -226,14 +292,74 @@ impl<'a> Session<'a> {
         })
     }
 
+    /// [`Session::exec`], and when the program is missing and auto-install
+    /// is on: search for the package that provides it, install it, and try
+    /// once more.
+    fn exec_tool(
+        &mut self,
+        mut spec: CommandSpec,
+        tool: &str,
+        is_engine: bool,
+        searchable: bool,
+    ) -> Result<Output, CompileError> {
+        match self.exec(&spec, tool, is_engine) {
+            Err(CompileError::EngineNotFound { .. }) if searchable && self.can_install() => {
+                self.install_tool(tool)?;
+                if let Some(p) = self.dist.and_then(|d| find_in_bin(&d.bin_dir, tool)) {
+                    spec.program = p;
+                }
+                self.exec(&spec, tool, is_engine)
+            }
+            other => other,
+        }
+    }
+
+    /// Locates the package that provides `tool` with `tlmgr search` (falling
+    /// back to the tool's own name, `xindy` for `texindy`) and installs it.
+    /// Only cancellation is an error; a failed install shows as the retry
+    /// still not finding the tool.
+    fn install_tool(&mut self, tool: &str) -> Result<(), CompileError> {
+        let Some(tlmgr) = &self.tlmgr else {
+            return Ok(());
+        };
+        self.emit(Event::Searching {
+            term: SearchTerm::File(format!("/{tool}")),
+        });
+        let mut pkgs = match tlmgr.search_file(&SearchTerm::File(format!("/{tool}"))) {
+            Ok(found) => found,
+            Err(_) if self.x.interrupted() => return Err(CompileError::Cancelled),
+            Err(_) => Vec::new(),
+        };
+        if pkgs.is_empty() {
+            pkgs.push(package_for_command(tool));
+        }
+        self.attempt(&pkgs)?;
+        Ok(())
+    }
+
     fn emit(&self, e: Event) {
         self.o.event(&e);
     }
 
-    fn prepare_output_dir(&self) -> Result<(), CompileError> {
+    /// Starts the run: creates `output_dir`, removes the stale `.log` and
+    /// output (the only deletions of files that existed before the run: a
+    /// run that exits 0 without writing a file must not pass on the last
+    /// build's), and records which auxiliary files exist.
+    fn prepare(&mut self) -> Result<(), CompileError> {
         if self.req.output_dir.is_some() {
             std::fs::create_dir_all(&self.out_dir)?;
         }
+        for stale in [self.out_file("log"), self.out_file("pdf")] {
+            match std::fs::remove_file(&stale) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e.into()),
+                _ => {}
+            }
+        }
+        let before = aux_files(&self.stem)
+            .into_iter()
+            .filter(|n| self.out_dir.join(n).exists())
+            .collect();
+        self.before = Some(before);
         Ok(())
     }
 
@@ -243,9 +369,30 @@ impl<'a> Session<'a> {
         let program = self.engine_program()?;
         self.runs += 1;
         self.emit(Event::RunningEngine { run: self.runs });
-        let mut spec = self.tool(program, &self.req.tools.engine);
-        spec.args.push("-halt-on-error".into());
-        spec.args.push("-interaction=batchmode".into());
+        let latexmk = self.req.engine == Engine::Latexmk;
+        let override_path = if latexmk {
+            self.req.tools.latexmk.clone()
+        } else {
+            self.req.tools.engine.clone()
+        };
+        let mut spec = self.tool(program, &override_path)?;
+        if latexmk {
+            // Quarto 1's `computeEngineArgs` (`latex.ts:79-94`).
+            spec.args.push("-interaction=batchmode".into());
+            spec.args.push("-halt-on-error".into());
+            if !self
+                .req
+                .engine_args
+                .iter()
+                .any(|a| LATEXMK_FORMAT_FLAGS.contains(&a.as_str()))
+            {
+                spec.args.push("-pdf".into());
+            }
+            spec.args.push("-quiet".into());
+        } else {
+            spec.args.push("-halt-on-error".into());
+            spec.args.push("-interaction=batchmode".into());
+        }
         if let Some(d) = &self.req.output_dir {
             let mut arg = OsString::from("-output-directory=");
             arg.push(d);
@@ -254,7 +401,7 @@ impl<'a> Session<'a> {
         spec.args
             .extend(self.req.engine_args.iter().map(Into::into));
         spec.args.push(self.file_name.clone());
-        let out = self.exec(&spec, program, true)?;
+        let out = self.exec_tool(spec, program, true, override_path.is_none())?;
         Ok(self.finish_run(&out))
     }
 
@@ -410,7 +557,7 @@ impl<'a> Session<'a> {
 
     fn builtin(&mut self) -> Result<Compiled, CompileError> {
         self.engine_program()?;
-        self.prepare_output_dir()?;
+        self.prepare()?;
         let mut run = self.initial()?;
 
         let mut index_created = false;
@@ -485,11 +632,11 @@ impl<'a> Session<'a> {
         } else {
             None
         };
-        let mut spec = self.tool(&command, &override_path);
+        let mut spec = self.tool(&command, &override_path)?;
         spec.args.extend(args.iter().map(Into::into));
         spec.args
             .push(self.rel(&format!("{}.idx", self.stem)).into_os_string());
-        let out = self.exec(&spec, &command, false)?;
+        let out = self.exec_tool(spec, &command, false, override_path.is_none())?;
         let ilg = self.read(&self.out_file("ilg")).unwrap_or_default();
         let log_path = self.out_file("log");
         let log = log_path.exists().then_some(log_path);
@@ -522,6 +669,15 @@ impl<'a> Session<'a> {
         }
     }
 
+    /// R's `tweak_aux`: `bibtex` on Windows, with no `tlmgr`, wants no `.bib`
+    /// extension in `\\bibdata`.
+    fn tweak_aux_file(&self) {
+        let path = self.out_file("aux");
+        if let Some(fixed) = self.read(&path).as_deref().and_then(tweak_aux) {
+            let _ = std::fs::write(&path, fixed);
+        }
+    }
+
     /// Runs the bibliography tool; whether it ran.
     fn bibliography(&mut self) -> Result<bool, CompileError> {
         loop {
@@ -536,9 +692,12 @@ impl<'a> Session<'a> {
             } else {
                 self.req.tools.bibtex.clone()
             };
-            let mut spec = self.tool(tool, &override_path);
+            if tool == "bibtex" && self.windows && self.dist.is_none() {
+                self.tweak_aux_file();
+            }
+            let mut spec = self.tool(tool, &override_path)?;
             spec.args.push(self.rel(&self.stem).into_os_string());
-            let out = self.exec(&spec, tool, false)?;
+            let out = self.exec_tool(spec, tool, false, override_path.is_none())?;
             if out.status.success() {
                 return Ok(true);
             }
@@ -624,11 +783,11 @@ impl<'a> Session<'a> {
                     .to_owned(),
             );
         }
-        self.prepare_output_dir()?;
+        self.prepare()?;
 
         self.runs = 1;
         self.emit(Event::RunningEngine { run: 1 });
-        let mut spec = self.tool("latexmk", &req.tools.latexmk);
+        let mut spec = self.tool("latexmk", &req.tools.latexmk)?;
         spec.args.push("-latexoption=-halt-on-error".into());
         spec.args.push("-interaction=batchmode".into());
         spec.args.push("-pdf".into());
@@ -649,6 +808,122 @@ impl<'a> Session<'a> {
         self.diag.warnings = log::latex_warnings(&run.log);
         self.diag.accessibility = log::accessibility(&run.log);
         Ok(self.compiled())
+    }
+
+    // ---------- tectonic ----------
+
+    /// One call, then a check that the output exists: no log, no loop (R,
+    /// `latex.R:124-126` at `7818777`). `--outdir` is the crate's addition.
+    fn tectonic(&mut self) -> Result<Compiled, CompileError> {
+        self.prepare()?;
+        self.runs = 1;
+        self.emit(Event::RunningEngine { run: 1 });
+        let override_path = self.req.tools.tectonic.clone();
+        let mut spec = self.tool("tectonic", &override_path)?;
+        spec.args
+            .extend(self.req.engine_args.iter().map(Into::into));
+        if let Some(d) = &self.req.output_dir {
+            spec.args.push("--outdir".into());
+            spec.args.push(d.clone().into_os_string());
+        }
+        spec.args.push(self.file_name.clone());
+        let out = self.exec_tool(spec, "tectonic", true, false)?;
+        let run = self.finish_run(&out);
+        if !run.success {
+            return Err(self.failure(&run));
+        }
+        self.counted = 1;
+        Ok(self.compiled())
+    }
+
+    // ---------- placement and cleanup ----------
+
+    /// Places the output, then cleans up per `Clean` and `KeepLog`, on every
+    /// outcome (a cancelled run counts as a failure).
+    fn finish(&self, result: Result<Compiled, CompileError>) -> Result<Compiled, CompileError> {
+        if self.before.is_none() {
+            return result;
+        }
+        let result = result.and_then(|mut c| {
+            if let Some(target) = &self.req.pdf_file {
+                let target = self.dir.join(target);
+                if target != c.pdf {
+                    move_file(&c.pdf, &target, &|a, b| std::fs::rename(a, b))?;
+                    c.pdf = target;
+                }
+            }
+            Ok(c)
+        });
+        let (success, warnings) = match &result {
+            Ok(c) => (true, !c.diagnostics.warnings.is_empty()),
+            Err(_) => (false, false),
+        };
+        self.cleanup(success, warnings);
+        let alive = |p: Option<PathBuf>| p.filter(|p| p.exists());
+        match result {
+            Ok(mut c) => {
+                c.log = if self.req.engine == Engine::Tectonic {
+                    None
+                } else {
+                    alive(c.log)
+                };
+                Ok(c)
+            }
+            Err(CompileError::Latex {
+                summary,
+                hints,
+                log,
+                missing,
+                stdout,
+                stderr,
+                exit_code,
+            }) => Err(CompileError::Latex {
+                summary,
+                hints,
+                log: alive(log),
+                missing,
+                stdout,
+                stderr,
+                exit_code,
+            }),
+            Err(CompileError::Bibliography {
+                engine,
+                log_excerpt,
+                log,
+            }) => Err(CompileError::Bibliography {
+                engine,
+                log_excerpt,
+                log: alive(log),
+            }),
+            Err(CompileError::Index { log_excerpt, log }) => Err(CompileError::Index {
+                log_excerpt,
+                log: alive(log),
+            }),
+            Err(other) => Err(other),
+        }
+    }
+
+    /// Removes the auxiliary files this run created (R's `setdiff(files2,
+    /// files1)`), never one that existed before it.
+    fn cleanup(&self, success: bool, warnings: bool) {
+        let Some(before) = &self.before else { return };
+        match (self.req.clean, success) {
+            (Clean::Never, _) | (Clean::OnSuccess, false) => return,
+            _ => {}
+        }
+        let keep_log = match self.req.keep_log {
+            KeepLog::Always => true,
+            KeepLog::Never => false,
+            KeepLog::OnFailure => !success,
+            KeepLog::OnWarnings => !success || warnings,
+        };
+        let log_name = format!("{}.log", self.stem);
+        for name in aux_files(&self.stem) {
+            if before.contains(&name) || (keep_log && name == log_name) {
+                continue;
+            }
+            let _ = std::fs::remove_file(self.out_dir.join(&name));
+        }
     }
 
     fn compiled(&mut self) -> Compiled {

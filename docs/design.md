@@ -559,9 +559,15 @@ impl Compiler {
     pub fn compile(&self, tex: &Path, req: &CompileRequest, x: &dyn Exec, o: &dyn Observer)
         -> Result<Compiled, CompileError>;
 }
-/// The auxiliary-file extensions the compile's cleanup removes (the union of R's and
-/// Quarto 1's lists); hosts that watch the working directory take it from here.
+/// The auxiliary files the compile's cleanup removes: the union of R's (`latexmk_emu`) and
+/// Quarto 1's (`cleanup()`) lists, 21 entries. The first 19 are extensions of the document's
+/// file (`<stem>.log`, `.idx`, `.aux`, `.bcf`, `.blg`, `.bbl`, `.fls`, `.out`, `.lof`, `.lot`,
+/// `.toc`, `.nav`, `.snm`, `.vrb`, `.ilg`, `.ind`, `.xwm`, `.brf`, `.run.xml`); the last two are
+/// whole file names, R's `preview.aux` and Quarto 1's `missfont.log`. Hosts that watch the
+/// working directory take the list from here.
 pub const AUX_EXTENSIONS: &[&str];
+/// The 21 file names of `AUX_EXTENSIONS` for the document `stem` (`doc.aux`, ..., `preview.aux`).
+pub fn aux_files(stem: &str) -> Vec<String>;
 #[derive(Serialize, Deserialize)]
 pub struct Compiled {
     pub pdf: PathBuf,                              // the output file; named `pdf` while `Output` has one variant

@@ -209,21 +209,6 @@ fn any_other_io_failure_is_io() {
     assert!(matches!(err, CompileError::Io(_)), "{err:?}");
 }
 
-#[test]
-fn an_unsupported_engine_in_the_builtin_loop_is_an_invalid_request() {
-    // Plan 5.4b adds the tectonic and latexmk per-pass engines.
-    for e in [tinytex::Engine::Tectonic, tinytex::Engine::Latexmk] {
-        let d = doc();
-        let x = tex(&model(&[], &[], &[]));
-        let err = run("er-engine", &d, &CompileRequest::new().engine(e), &x).unwrap_err();
-        assert!(
-            matches!(err, CompileError::InvalidRequest { .. }),
-            "{err:?}"
-        );
-        assert!(x.calls().is_empty());
-    }
-}
-
 // ---------- cancellation ----------
 
 #[test]

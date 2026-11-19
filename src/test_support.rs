@@ -261,3 +261,18 @@ impl Exec for FakeTex {
         self.interrupted.load(Ordering::SeqCst)
     }
 }
+
+/// [`crate::compile`]'s file move with an injected `rename`, for the
+/// cross-filesystem fallback test.
+pub fn move_file_with(
+    from: &std::path::Path,
+    to: &std::path::Path,
+    rename: &dyn Fn(&std::path::Path, &std::path::Path) -> io::Result<()>,
+) -> io::Result<()> {
+    crate::compile::move_file(from, to, rename)
+}
+
+/// R's Windows `.aux` tweak, a pure function; `None` when nothing changes.
+pub fn tweak_aux(aux: &str) -> Option<String> {
+    crate::compile::tweak_aux(aux)
+}

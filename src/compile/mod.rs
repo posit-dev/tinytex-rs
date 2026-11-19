@@ -25,7 +25,11 @@ use crate::exec::{Exec, Observer};
 use crate::log::{AccessibilityWarnings, Hint, InstallFailure, SearchTerm};
 use crate::tlmgr::TlmgrError;
 
+mod place;
 mod run;
+
+pub use place::{AUX_EXTENSIONS, aux_files};
+pub(crate) use place::{move_file, tweak_aux};
 
 /// The default total engine runs, first included (Quarto 1's `(minRuns || 1)`).
 pub(crate) const DEFAULT_MIN_RUNS: u32 = 1;
@@ -110,7 +114,7 @@ pub enum OnBibFailure {
     Warn,
 }
 
-/// Which auxiliary files the cleanup removes (plan 5.4b gives it behavior).
+/// Which runs end with the cleanup of the auxiliary files the run created.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -121,7 +125,7 @@ pub enum Clean {
     Always,
 }
 
-/// When the engine log is kept (plan 5.4b gives it behavior).
+/// When the engine log is exempt from the cleanup `Clean` selects.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
@@ -465,18 +469,31 @@ mod serde_json_free {
 pub struct Compiler {
     dist: Option<Distribution>,
     cfg: Config,
+    windows: bool,
 }
 
 impl Compiler {
     /// `None` takes every tool from `PATH` and cannot install packages.
     pub fn new(dist: Option<Distribution>, cfg: Config) -> Self {
-        Self { dist, cfg }
+        Self {
+            dist,
+            cfg,
+            windows: cfg!(windows),
+        }
     }
 
     /// [`detect::find`], then [`Compiler::new`].
     pub fn auto(cfg: Config) -> Self {
         let dist = detect::find(&cfg);
         Self::new(dist, cfg)
+    }
+
+    /// Behave as on Windows (or not) whatever the host is, so a test on one
+    /// platform runs the other's branch.
+    #[doc(hidden)]
+    pub fn for_windows(mut self, windows: bool) -> Self {
+        self.windows = windows;
+        self
     }
 
     /// Compiles `tex` as `req` asks.
@@ -487,6 +504,6 @@ impl Compiler {
         x: &dyn Exec,
         o: &dyn Observer,
     ) -> Result<Compiled, CompileError> {
-        run::compile(self.dist.as_ref(), &self.cfg, tex, req, x, o)
+        run::compile(self.dist.as_ref(), &self.cfg, self.windows, tex, req, x, o)
     }
 }

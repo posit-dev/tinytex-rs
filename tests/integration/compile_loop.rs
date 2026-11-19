@@ -18,7 +18,13 @@ fn a_document_that_settles_after_one_run_is_built_once() {
     let d = doc();
     let x = tex(&model(&[], &[], &[]));
     pdflatex(&x, vec![ok(CLEAN_LOG)]);
-    let c = run("lp-once", &d, &CompileRequest::new(), &x).unwrap();
+    let c = run(
+        "lp-once",
+        &d,
+        &CompileRequest::new().clean(tinytex::Clean::Never),
+        &x,
+    )
+    .unwrap();
     assert_eq!(c.runs, 1);
     assert_eq!(x.count("pdflatex"), 1);
     assert_eq!(c.pdf, d.path("doc.pdf"));

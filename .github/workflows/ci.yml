@@ -50,3 +50,82 @@ jobs:
         with:
           toolchain: "1.94"
       - run: cargo check --all-targets --all-features
+
+  # Real-TeX tests against TinyTeX (plan 5.4b). Linux and macOS only: R's
+  # install script is a shell script, so Windows runs the mocked tests of the
+  # `test` job above. TINYTEX_RS_REQUIRE_TEX=1 makes a missing or broken
+  # install fail the real-TeX tests instead of skipping them, and enables
+  # the `auto_install_` tests, which install packages (nextest runs them alone:
+  # `threads-required = "num-cpus"` in .config/nextest.toml).
+  tinytex:
+    name: TinyTeX (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    env:
+      TINYTEX_RS_REQUIRE_TEX: "1"
+      # The release of rstudio/tinytex-releases that R's install script
+      # downloads (the script wants the version without the `v`), and the
+      # installer bundle. Keep in step with q2's pin (TINYTEX_VERSION in
+      # quarto-dev/q2 .github/workflows/test-suite.yml, plan 6.1).
+      TINYTEX_VERSION: "2026.11"
+      TINYTEX_INSTALLER: "TinyTeX-1"
+      # R's install script at the commit the crate follows (`7818777` of
+      # rstudio/tinytex, the structural baseline of design section 3).
+      TINYTEX_SCRIPT_SHA: "7818777360b28910ccc6b77c1395fd2a39e3e31c"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+
+      # Restored on every run, saved only right after a fresh install and
+      # before any test: the auto-install tests change the tree and must never
+      # mutate what the cache stores. The key covers the pin and the package
+      # list below.
+      - name: Restore TinyTeX cache
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.TinyTeX
+            ~/Library/TinyTeX
+          key: tinytex-${{ runner.os }}-${{ runner.arch }}-${{ env.TINYTEX_VERSION }}-${{ env.TINYTEX_INSTALLER }}-latexmk-xetex-luatex-bibtex-makeindex-natbib
+
+      - name: Install TinyTeX
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/rstudio/tinytex/${TINYTEX_SCRIPT_SHA}/tools/install-bin-unix.sh" -o install-bin-unix.sh
+          sh install-bin-unix.sh --no-path
+          if [ "$RUNNER_OS" = "Linux" ]; then root="$HOME/.TinyTeX"; else root="$HOME/Library/TinyTeX"; fi
+          export PATH="$(ls -d "$root"/bin/*/ | head -1):$PATH"
+          # The real-TeX tests need these tools; TinyTeX-1 may not ship them all.
+          tlmgr install latexmk xetex luatex bibtex makeindex natbib
+          du -sh "$root"
+
+      - name: Put TinyTeX on PATH and smoke-check it
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then root="$HOME/.TinyTeX"; else root="$HOME/Library/TinyTeX"; fi
+          bindir=$(ls -d "$root"/bin/*/ | head -1)
+          echo "$bindir" >> "$GITHUB_PATH"
+          export PATH="$bindir:$PATH"
+          for tool in pdflatex xelatex lualatex bibtex latexmk tlmgr; do
+            "$tool" --version >/dev/null || { echo "::error::$tool --version failed"; exit 1; }
+          done
+          command -v makeindex >/dev/null || { echo "::error::makeindex missing"; exit 1; }
+
+      - name: Save TinyTeX cache (fresh install only)
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.TinyTeX
+            ~/Library/TinyTeX
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - run: cargo nextest run --all-features

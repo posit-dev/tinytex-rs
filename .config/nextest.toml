@@ -1,0 +1,7 @@
+# The tests that install packages into the shared TeX tree must not overlap
+# with any test that reads it: `threads-required = "num-cpus"` gives each of
+# them the whole machine, so nextest runs it alone. (A test group would
+# serialize only its own members.)
+[[profile.default.overrides]]
+filter = "test(/::auto_install_/)"
+threads-required = "num-cpus"

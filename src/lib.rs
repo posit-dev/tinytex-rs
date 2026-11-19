@@ -26,8 +26,8 @@ pub mod test_support;
 pub mod tlmgr;
 
 pub use compile::{
-    Bib, Clean, CompileError, CompileRequest, Compiled, Compiler, Diagnostics, Driver, Engine,
-    IndexEngine, KeepLog, OnBibFailure, Output, Recover, ToolPaths,
+    AUX_EXTENSIONS, Bib, Clean, CompileError, CompileRequest, Compiled, Compiler, Diagnostics,
+    Driver, Engine, IndexEngine, KeepLog, OnBibFailure, Output, Recover, ToolPaths, aux_files,
 };
 pub use config::{Config, Prefer, TlmgrUpdate};
 pub use detect::{Distribution, Kind};
