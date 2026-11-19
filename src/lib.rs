@@ -18,13 +18,18 @@
 pub mod config;
 pub mod detect;
 pub mod exec;
+mod lock;
 pub mod log;
 #[doc(hidden)]
 pub mod test_support;
+pub mod tlmgr;
 
 pub use config::{Config, Prefer, TlmgrUpdate};
 pub use detect::{Distribution, Kind};
 pub use exec::{CommandSpec, Event, Exec, NullObserver, Observer, StdExec};
+pub use tlmgr::{
+    FmtutilWarning, InstallOutcome, PathAction, Tlmgr, TlmgrError, UpdateOpts, UpdateOutcome,
+};
 
 use std::fmt;
 

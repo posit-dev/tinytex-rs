@@ -43,8 +43,14 @@ serde_both!(
     tinytex::log::Hint,
     tinytex::log::LatexError,
     tinytex::log::SearchTerm,
+    tinytex::tlmgr::FmtutilWarning,
+    tinytex::tlmgr::InstallOutcome,
+    tinytex::tlmgr::PathAction,
+    tinytex::tlmgr::TlVersion,
+    tinytex::tlmgr::UpdateOpts,
+    tinytex::tlmgr::UpdateOutcome,
 );
-serde_serialize_only!();
+serde_serialize_only!(tinytex::tlmgr::TlmgrError);
 
 #[test]
 fn error_codes_are_stable_strings() {
@@ -57,4 +63,15 @@ fn error_codes_are_stable_strings() {
     let back: tinytex::ErrorCode = serde_json::from_str("\"latex.missing_package\"").unwrap();
     assert_eq!(back, code);
     assert_eq!(code.to_string(), "latex.missing_package");
+}
+
+#[test]
+fn tlmgr_errors_serialize_with_a_stable_code_and_a_message() {
+    let err = tinytex::TlmgrError::Interrupted;
+    assert_eq!(err.code().as_str(), "tlmgr.interrupted");
+    let json = serde_json::to_value(&err).unwrap();
+    assert_eq!(json["code"], "tlmgr.interrupted");
+    assert_eq!(json["message"], "interrupted");
+    let io = tinytex::TlmgrError::from(std::io::Error::other("x"));
+    assert_eq!(io.code().as_str(), "tlmgr.io");
 }

@@ -427,10 +427,17 @@ impl<'a> Tlmgr<'a> {
 impl Tlmgr<'_> {
     pub fn version(&self) -> Result<TlVersion, TlmgrError>;               // year + tlmgr date
     pub fn search_file(&self, term: &SearchTerm) -> Result<Vec<String>, TlmgrError>;
+    pub fn info(&self, pkgs: &[String], fields: &[&str], only_installed: bool)
+        -> Result<Vec<Vec<String>>, TlmgrError>;                          // `info --list --data f1,f2`; one row per line
+    pub fn repository(&self) -> Result<String, TlmgrError>;               // `option repository`
+    pub fn packages_for_log(&self, log: &str, missfont: Option<&str>)     // R `parse_packages`
+        -> Result<Vec<String>, TlmgrError>;
+    pub fn install_for_log(&self, log: &str, missfont: Option<&str>)      // R `parse_install`
+        -> Result<InstallOutcome, TlmgrError>;
     pub fn is_installed(&self, pkg: &str) -> bool;
     pub fn install(&self, pkgs: &[String]) -> Result<InstallOutcome, TlmgrError>;  // batch; recheck under the lock;
                                                                                     // accept 0 or 255; retry once (§3.2)
-    pub fn update(&self, opts: UpdateOpts) -> Result<UpdateOutcome, TlmgrError>;   // Updated | TexLiveTooOld{local,remote}
+    pub fn update(&self, opts: UpdateOpts) -> Result<UpdateOutcome, TlmgrError>;   // Updated | TexLiveTooOld{..} | Skipped
     pub fn remove(&self, pkgs: &[String]) -> Result<(), TlmgrError>;
     pub fn path(&self, action: PathAction) -> Result<(), TlmgrError>;              // `path add|remove`; macOS /etc/paths.d inside
     pub fn set_repository(&self, url: &str) -> Result<(), TlmgrError>;
@@ -439,13 +446,21 @@ impl Tlmgr<'_> {
         -> Result<Output, TlmgrError>;                                              // classifies the command (§2)
 }
 /// Result types (serde on all): `TlVersion { year: u32, date: String }`;
-/// `InstallOutcome { installed: Vec<String>, already_present: Vec<String>, failed: Vec<String> }`
-/// (per-package; a package is `failed` when still missing after the retry);
-/// `UpdateOutcome::{ Updated, TexLiveTooOld { local: u32, remote: u32 } }`;
-/// `UpdateOpts { all: bool, self_only: bool, run_fmtutil: bool, delete_tlpdb: bool, more_args: Vec<String> }`;
+/// `InstallOutcome { installed, already_present, failed: Vec<String>, warnings: Vec<FmtutilWarning> }`
+/// (per-package; a package is `failed` when still missing after the retry; `warnings` are the
+/// non-fatal `fmtutil` failures of the format rebuilds the install ran);
+/// `UpdateOutcome::{ Updated { warning: Option<FmtutilWarning> }, TexLiveTooOld { local: u32, remote: u32 },
+/// Skipped }` (`Skipped`: `TlmgrUpdate::Never`, or an update already ran in this process);
+/// `UpdateOpts { all: bool, self_only: bool, run_fmtutil: bool, delete_tlpdb: bool, more_args: Vec<String> }`
+/// (default: `all`, `run_fmtutil`; `self_only` means `update --self` alone and overrides `all`; without
+/// it `all` runs `update --all --self`, as R does, and `--self` is dropped in user mode);
 /// `PathAction::{ Add, Remove }`; `FmtutilWarning { message: String, exit_code: Option<i32> }`.
 /// `Tlmgr::install` and `update` hold the install lock; `install_locked(&self, &InstallGuard, ..)`
 /// is private and takes the witness (§2).
+/// `TlmgrError` (`#[non_exhaustive]`, `Serialize` only; stable codes `tlmgr.io`, `tlmgr.command_failed`,
+/// `tlmgr.texlive_too_old`, `tlmgr.interrupted`, `tlmgr.unparseable`): `Io`, `Command { program, args, code,
+/// stderr }`, `TexLiveTooOld { local, remote }` (returned by `install` when packages stay missing and the
+/// distribution is known to be a release behind), `Interrupted`, `Unparseable { what, output }`.
 /// `TlmgrError::Interrupted`: `interrupted()` was true after a command returned, `Ok` or
 /// `Err` (§2); the compile maps it to `Cancelled`.
 
