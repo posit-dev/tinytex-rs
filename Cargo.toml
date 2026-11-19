@@ -1,0 +1,32 @@
+[package]
+name = "tinytex"
+version = "0.0.0"
+edition = "2024"
+# 1.77.2 is the floor for `.bat` execution through `cmd` (plan 5.3a), 1.85 the
+# floor for edition 2024. 1.94 is the stable release current at bootstrap that
+# q2's pinned nightly (`nightly-2026-04-28`, which compiles this crate) can
+# satisfy; a newer stable would make that nightly refuse to build the crate.
+rust-version = "1.94"
+description = "Blocking driver for TeX Live and TinyTeX: compile a .tex file to PDF, parse logs, manage tlmgr packages."
+license = "MIT"
+repository = "https://github.com/posit-dev/tinytex-rs"
+readme = "README.md"
+keywords = ["tex", "latex", "tinytex", "pdf", "tlmgr"]
+categories = ["development-tools", "text-processing"]
+
+[features]
+default = []
+# The `tinytex` command-line binary (plan 5.6).
+cli = ["dep:clap", "dep:serde_json"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+# Quarto 1's log matchers use no lookaround or backreferences.
+regex = "1"
+clap = { version = "4", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[dev-dependencies]
+serde_json = "1"
+tempfile = "3"
