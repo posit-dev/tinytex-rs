@@ -714,10 +714,13 @@ Commands mirror the API modules:
 | `--tlmgr-update <auto\|never>` | `Config.tlmgr_update` | | none | `tinytex.tlmgr_update` |
 | `--prefer <tinytex\|system>` | `Config.prefer` | | `latex-tinytex` (YAML) | none |
 | `--install-dir <dir>`, `--repository <url>` | `Config.install_dir`, `Config.repository` | | none | `TINYTEX_DIR`, `tinytex.repository` |
+| `--tlmgr-path <path>`, `--usermode`, `--delete-tlpdb`, `--verbose` | `Config.tlmgr_path`, `usermode`, `delete_tlpdb`, `verbose` | | none | `tlmgr` location, user mode, `delete_tlpdb_files`, `verbose` |
 | `--tool <name>=<path>` (repeatable) | `tools` | | none | none |
-| `--request <file\|->` | the whole request, from JSON | | none | none |
-| `--print-request` | prints `{request, config}` as the flags produce them, then exits | | none | none |
-| `--json`, `--events json` | output format only | | none | none |
+| `--request <file\|->` | the whole request, from JSON (a request object, or a `{request, config}` pair such as `--print-request` prints); flags given as well override its fields | | none | none |
+| `--print-request` | prints `{schema, request, config}` as the flags produce them, then exits | | none | none |
+| `--json`, `--events <text\|json>`, `--timeout <seconds>` | output format and deadline only | | none | none |
+
+The `Config` flags (`--install-dir`, `--repository`, `--tlmgr-opt`, `--tlmgr-update`, `--prefer`, `--tlmgr-path`, `--usermode`, `--delete-tlpdb`, `--verbose`) and `--json`, `--events` and `--timeout` are global: they work before or after the subcommand name. `tinytex tlmgr` has the operations `version`, `search`, `info`, `install`, `update [--self]`, `remove`, `repository [url]`, `path add|remove`, `fmtutil` and `run [--changes-installation] -- <args>`.
 
 `--bib-engine` takes the *program* (`bibtex`, `biber`) and accepts Quarto 1\'s citation
 methods (`biblatex`, `natbib`) as aliases; q2\'s stage passes explicit values (D24). Quarto 1\'s
@@ -740,7 +743,7 @@ five-flag exception list fails a coverage test that walks the `clap` definition.
 field is added by the CLI\'s output wrapper (the library types have no such field): every
 JSON object on stdout is `{ "schema": 1, ... }`, and an error is `{ "schema": 1, "code":
 ..., "message": ... }` with the stable `code` below. Each `--events json` line is a JSON
-object with `schema` and a `type` tag (the `Event` variant in snake case). Consumers ignore
+object with `schema` and a `type` tag (the `Event` variant in snake case; the library serializes the tag as `event`, and the CLI renames it). Consumers ignore
 unknown `type` values and unknown fields within one schema version; removing or retyping a
 field bumps `schema`. Paths serialize as UTF-8 strings with a lossy conversion for non-UTF-8
 paths, and a path never has its separators rewritten. Codes and exit codes:
@@ -759,6 +762,9 @@ paths, and a path never has its separators rewritten. Codes and exit codes:
 | `Cancelled` (also the `--timeout` deadline) | `cancelled` | 4 |
 | `Io` | `io` | 3 |
 | `tinytex tlmgr`: `TlmgrError` | `tlmgr` | 1 |
+| `tinytex tlmgr`: `TlmgrError::TexLiveTooOld` (and an `update` that reports `tex_live_too_old`) | `texlive_too_old` | 5 |
+| `tinytex tlmgr`: `TlmgrError::Interrupted`; any `Io` error of kind `TimedOut` (the `--timeout` deadline) | `cancelled` | 4 |
+| `tinytex log`: the file cannot be read | `io` | 3 |
 | `tinytex detect`: no installation found | `no_tex_installation` | 3 |
 
 A usage error exits 2 before any of these.

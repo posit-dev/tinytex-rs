@@ -1,6 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "cli")]
+pub mod cli;
 pub mod compile;
 pub mod config;
 pub mod detect;
