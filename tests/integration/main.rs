@@ -25,5 +25,6 @@ pub mod real_tex;
 pub mod smoke;
 pub mod tlmgr;
 pub mod tlmgr_cancel;
+pub mod tlmgr_fixtures;
 pub mod tlmgr_lock;
 pub mod tlmgr_model;

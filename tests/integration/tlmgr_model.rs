@@ -2,7 +2,7 @@
 //! packages are installed, which can be installed, and how each `tlmgr
 //! install` call behaves. Not a test module.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -15,6 +15,45 @@ pub struct Model {
     /// One `(exit status, whether it installs)` per `tlmgr install` call;
     /// `(0, true)` once the script runs out.
     pub script: Mutex<VecDeque<(i32, bool)>>,
+    /// Raw replies queued per `tlmgr` subcommand (see [`Model::raw`]).
+    raw: Mutex<HashMap<String, VecDeque<Reply>>>,
+}
+
+impl Model {
+    /// Queues `reply` as the answer to the next `tlmgr <subcommand> ..` call,
+    /// replacing the status, stdout, and stderr the model would give. The
+    /// model's own work for that call still happens (an `install` still
+    /// consumes its `script` entry and installs), so a test can pair a captured
+    /// reply with any state change. Works for any subcommand, including ones
+    /// the model has no handler for (`search`, `update`). One reply per call,
+    /// in the order queued; afterwards the model answers again.
+    pub fn raw(&self, subcommand: &str, reply: Reply) {
+        self.raw
+            .lock()
+            .unwrap()
+            .entry(subcommand.to_owned())
+            .or_default()
+            .push_back(reply);
+    }
+}
+
+/// A captured real `tlmgr` reply: `tests/fixtures/tlmgr/NAME.{status,stdout,
+/// stderr}`, replayed byte for byte (the fixtures are not subject to line-ending
+/// conversion; see `.gitattributes`). Panics when a file is missing or is not
+/// UTF-8, so a mistyped name fails the test that uses it.
+pub fn fixture(name: &str) -> Reply {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tlmgr");
+    let read = |ext: &str| {
+        let path = dir.join(format!("{name}.{ext}"));
+        std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    };
+    let code: i32 = read("status")
+        .trim()
+        .parse()
+        .unwrap_or_else(|e| panic!("fixture {name}: bad status: {e}"));
+    Reply::code(code)
+        .stdout(read("stdout"))
+        .stderr(read("stderr"))
 }
 
 pub fn model(installed: &[&str], installable: &[&str], script: &[(i32, bool)]) -> Arc<Model> {
@@ -22,6 +61,7 @@ pub fn model(installed: &[&str], installable: &[&str], script: &[(i32, bool)]) -
         installed: Mutex::new(installed.iter().map(|s| (*s).to_owned()).collect()),
         installable: installable.iter().map(|s| (*s).to_owned()).collect(),
         script: Mutex::new(script.iter().copied().collect()),
+        raw: Mutex::new(HashMap::new()),
     })
 }
 
@@ -39,6 +79,25 @@ pub fn fake(model: &Arc<Model>) -> FakeTex {
             .iter()
             .map(|a| a.to_string_lossy().into_owned())
             .collect();
+        let own = own_reply(&model, &args);
+        // A queued raw reply replaces the model's answer, after the model's own
+        // work (state changes) has happened.
+        let mut raw = model.raw.lock().unwrap();
+        for (subcommand, queue) in raw.iter_mut() {
+            if args.iter().any(|a| a == subcommand)
+                && let Some(reply) = queue.pop_front()
+            {
+                return Some(reply);
+            }
+        }
+        own
+    })
+}
+
+/// The model's own answer to one `tlmgr` call, or `None` for a command it does
+/// not model.
+fn own_reply(model: &Model, args: &[String]) -> Option<Reply> {
+    {
         let at = |word: &str| args.iter().position(|a| a == word);
         if let Some(i) = at("info") {
             let pkgs = &args[args.iter().position(|a| a == "name")? + 1..];
@@ -85,7 +144,7 @@ pub fn fake(model: &Arc<Model>) -> FakeTex {
             return Some(Reply::code(code));
         }
         None
-    })
+    }
 }
 
 /// A TinyTeX-shaped distribution whose root is unique to `name`, so tests in
