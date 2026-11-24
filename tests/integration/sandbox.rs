@@ -216,6 +216,11 @@ impl Sandbox {
         &self.exec
     }
 
+    /// The child's `PATH` (the copy's `bin` plus system directories).
+    pub fn exec_path(&self) -> OsString {
+        self.exec.path.clone()
+    }
+
     /// Runs one of the distribution's programs in the child environment.
     pub fn run(&self, program: &str, args: &[&str]) -> io::Result<Output> {
         let mut spec = self.dist.command(program);

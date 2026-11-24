@@ -15,6 +15,7 @@ pub mod compile_outputs;
 pub mod compile_support;
 pub mod compile_types;
 pub mod config;
+pub mod conformance;
 pub mod conventions;
 pub mod detect;
 pub mod events;
