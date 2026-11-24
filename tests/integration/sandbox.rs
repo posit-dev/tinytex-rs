@@ -77,14 +77,11 @@ impl fmt::Display for Refusal {
             Refusal::RootUnreadable(p) => {
                 write!(f, "TINYTEX_DIR {} cannot be resolved", p.display())
             }
-            Refusal::DefaultInstallDir(p) => {
-                write!(
-                    f,
-                    "{} is, or lies inside, the default install directory {}",
-                    "TINYTEX_DIR",
-                    p.display()
-                )
-            }
+            Refusal::DefaultInstallDir(p) => write!(
+                f,
+                "TINYTEX_DIR is, or lies inside, the default install directory {}",
+                p.display()
+            ),
             Refusal::NotUnderTemp(p) => {
                 write!(
                     f,
