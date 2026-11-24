@@ -36,7 +36,11 @@ fn source() -> TempDir {
     std::fs::create_dir_all(r.join("bin/arch")).unwrap();
     std::fs::create_dir_all(r.join("texmf-dist/scripts")).unwrap();
     std::fs::write(r.join("texmf-dist/scripts/tlmgr.pl"), "#!/bin/sh\n").unwrap();
-    symlink("../../texmf-dist/scripts/tlmgr.pl", r.join("bin/arch/tlmgr")).unwrap();
+    symlink(
+        "../../texmf-dist/scripts/tlmgr.pl",
+        r.join("bin/arch/tlmgr"),
+    )
+    .unwrap();
     std::fs::create_dir_all(r.join("texmf-var/fonts/conf")).unwrap();
     std::fs::write(r.join("texmf-var/fonts/conf/leak.conf"), "/original/fonts").unwrap();
     std::fs::create_dir_all(r.join("texmf-var/luatex-cache")).unwrap();
@@ -54,7 +58,10 @@ fn var(out: &Output, name: &str) -> String {
 fn create(base: &Path, src: &Path) -> (PathBuf, String) {
     let out = run(base, &["create", src.to_str().unwrap()]);
     assert!(out.status.success(), "create failed: {}", text(&out.stderr));
-    (PathBuf::from(var(&out, "TINYTEX_DIR")), var(&out, "TINYTEX_SANDBOX_NONCE"))
+    (
+        PathBuf::from(var(&out, "TINYTEX_DIR")),
+        var(&out, "TINYTEX_SANDBOX_NONCE"),
+    )
 }
 
 #[test]
@@ -64,12 +71,20 @@ fn create_copies_the_tree_and_writes_the_sentinel_then_the_marker() {
     let (root, nonce) = create(base.path(), src.path());
 
     assert_eq!(root.parent().unwrap(), base.path().canonicalize().unwrap());
-    assert!(root.file_name().unwrap().to_string_lossy().starts_with("tinytex-sandbox."));
+    assert!(
+        root.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("tinytex-sandbox.")
+    );
     assert!(!nonce.is_empty());
     let sentinel = std::fs::read_to_string(root.join("DISPOSABLE_TINYTEX")).unwrap();
     assert_eq!(sentinel, format!("{}\n{}\n", root.display(), nonce));
     assert!(root.join("COMPLETE").exists());
-    assert_eq!(std::fs::read_to_string(root.join("texmf-var/keep.txt")).unwrap(), "kept");
+    assert_eq!(
+        std::fs::read_to_string(root.join("texmf-var/keep.txt")).unwrap(),
+        "kept"
+    );
     // Symlinks are copied as symlinks, not followed.
     let link = root.join("bin/arch/tlmgr");
     assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
@@ -93,7 +108,11 @@ fn create_refuses_an_absolute_symlink_and_leaves_nothing_behind() {
     symlink("/usr/bin", src.path().join("texmf-dist/abs")).unwrap();
     let out = run(base.path(), &["create", src.path().to_str().unwrap()]);
     assert!(!out.status.success());
-    assert!(text(&out.stderr).contains("absolute symlink"), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stderr).contains("absolute symlink"),
+        "{}",
+        text(&out.stderr)
+    );
     assert_eq!(std::fs::read_dir(base.path()).unwrap().count(), 0);
 }
 
@@ -104,7 +123,11 @@ fn create_refuses_a_relative_symlink_that_escapes_the_tree() {
     symlink("../../../outside", src.path().join("texmf-dist/up")).unwrap();
     let out = run(base.path(), &["create", src.path().to_str().unwrap()]);
     assert!(!out.status.success());
-    assert!(text(&out.stderr).contains("escapes"), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stderr).contains("escapes"),
+        "{}",
+        text(&out.stderr)
+    );
     assert_eq!(std::fs::read_dir(base.path()).unwrap().count(), 0);
 }
 
@@ -124,7 +147,10 @@ fn delete_needs_this_runs_nonce_and_removes_the_tree_and_its_home() {
     let (root, nonce) = create(base.path(), src.path());
     let home = PathBuf::from(format!("{}.home", root.display()));
 
-    let wrong = run(base.path(), &["delete", root.to_str().unwrap(), "not-the-nonce"]);
+    let wrong = run(
+        base.path(),
+        &["delete", root.to_str().unwrap(), "not-the-nonce"],
+    );
     assert!(!wrong.status.success());
     assert!(root.exists(), "a wrong nonce must delete nothing");
 
@@ -140,7 +166,11 @@ fn delete_refuses_a_directory_outside_the_base_or_without_the_prefix() {
     let plain = base.path().join("some-other-dir");
     std::fs::create_dir(&plain).unwrap();
     std::fs::write(plain.join("DISPOSABLE_TINYTEX"), "p\nn\n").unwrap();
-    assert!(!run(base.path(), &["delete", plain.to_str().unwrap(), "n"]).status.success());
+    assert!(
+        !run(base.path(), &["delete", plain.to_str().unwrap(), "n"])
+            .status
+            .success()
+    );
     assert!(plain.exists());
 
     // Prefixed and sentineled, but in another directory than the base.
@@ -148,7 +178,11 @@ fn delete_refuses_a_directory_outside_the_base_or_without_the_prefix() {
     let far = elsewhere.path().join("tinytex-sandbox.zzzzzz");
     std::fs::create_dir(&far).unwrap();
     std::fs::write(far.join("DISPOSABLE_TINYTEX"), "p\nn\n").unwrap();
-    assert!(!run(base.path(), &["delete", far.to_str().unwrap(), "n"]).status.success());
+    assert!(
+        !run(base.path(), &["delete", far.to_str().unwrap(), "n"])
+            .status
+            .success()
+    );
     assert!(far.exists());
 }
 
@@ -160,7 +194,11 @@ fn delete_refuses_a_symlink_with_the_prefix() {
     std::fs::write(target.path().join("precious"), "data").unwrap();
     let link = base.path().join("tinytex-sandbox.linked");
     symlink(target.path(), &link).unwrap();
-    assert!(!run(base.path(), &["delete", link.to_str().unwrap(), "n"]).status.success());
+    assert!(
+        !run(base.path(), &["delete", link.to_str().unwrap(), "n"])
+            .status
+            .success()
+    );
     assert!(target.path().join("precious").exists());
 }
 
