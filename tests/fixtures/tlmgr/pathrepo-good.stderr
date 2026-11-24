@@ -1,0 +1,2 @@
+TLPDB: 00texlive.installation not found, cannot read option available_architectures.
+TLPDB::setting: no available_architectures, returning empty list

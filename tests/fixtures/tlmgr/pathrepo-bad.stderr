@@ -1,0 +1,15 @@
+TLPDB: 00texlive.installation not found, cannot read option available_architectures.
+TLPDB::setting: no available_architectures, returning empty list
+TeXLive::TLUtils::check_file_and_remove: checksums differ for <tmp>/cG7Mp2UXyM/cXR4Sqm6KW/fakebad.tar.xz:
+TeXLive::TLUtils::check_file_and_remove:   tlchecksum=1b3bd7ba275a0ca5aa544153f579582053e4032d6f71e31df2302364d642e897e02ff49185cfc303862bc40a067cddd7fbbc17b838b7adf282b0a3c43161d6d3, arg=00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+TeXLive::TLUtils::check_file_and_remove: backtrace:
+ -> <copy>/tlpkg/TeXLive/TLUtils.pm:2790: TeXLive::TLUtils::check_file_and_remove
+ -> <copy>/tlpkg/TeXLive/TLPDB.pm:1989: TeXLive::TLUtils::unpack
+ -> <copy>/tlpkg/TeXLive/TLPDB.pm:1806: TeXLive::TLPDB::_install_data
+ -> <copy>/tlpkg/TeXLive/TLPDB.pm:1722: TeXLive::TLPDB::not_virtual_install_package
+ -> <copy>/bin/universal-darwin/tlmgr:4036: TeXLive::TLPDB::install_package
+ -> <copy>/bin/universal-darwin/tlmgr:810: main::action_install
+ -> <copy>/bin/universal-darwin/tlmgr:716: main::execute_action
+ -> <copy>/bin/universal-darwin/tlmgr:374: main::main
+TeXLive::TLUtils::check_file_and_remove:   removing <tmp>/cG7Mp2UXyM/cXR4Sqm6KW/fakebad.tar.xz, but saving copy in <tmp>/cA8wVxatvV
+TLPDB::_install_data: consistency checks failed for <repo>/archive/fakebad.tar.xz

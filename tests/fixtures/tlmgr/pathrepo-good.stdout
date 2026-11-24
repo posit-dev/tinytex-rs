@@ -1,0 +1,6 @@
+tlmgr: package repository <repo> (not verified: gpg unavailable)
+[1/1, ??:??/??:??] install: fakegood [1k]
+running mktexlsr ...
+done running mktexlsr.
+tlmgr: package log updated: <copy>/texmf-var/web2c/tlmgr.log
+tlmgr: command log updated: <copy>/texmf-var/web2c/tlmgr-commands.log

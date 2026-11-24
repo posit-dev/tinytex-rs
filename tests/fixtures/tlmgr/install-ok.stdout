@@ -1,0 +1,7 @@
+tlmgr: package repository https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final (not verified: valid signature with expired key)
+[1/2, ??:??/??:??] install: animate [24k]
+[2/2, 00:00/00:00] install: ocgx2 [17k]
+running mktexlsr ...
+done running mktexlsr.
+tlmgr: package log updated: <copy>/texmf-var/web2c/tlmgr.log
+tlmgr: command log updated: <copy>/texmf-var/web2c/tlmgr-commands.log
