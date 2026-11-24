@@ -193,6 +193,30 @@ static TOO_OLD: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid regex")
 });
 
+/// The lines `tlmgr info` prints for a package it does not know: one naming the package
+/// (`package X not locally!` with `--only-installed`, `package X not found neither locally
+/// nor remote!` without it), then two lines closing the run.
+static UNKNOWN_PACKAGE_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^tlmgr: (?:package \S+ not (?:locally|found neither locally nor remote)!|action info returned an error; continuing\.|An error has occurred\. See above messages\. Exiting\.)$",
+    )
+    .expect("valid regex")
+});
+
+/// Whether `stderr` from a failed `tlmgr info` says only that packages are unknown: it names
+/// at least one and holds no other complaint.
+fn only_unknown_packages(stderr: &str) -> bool {
+    let mut lines = stderr.lines().map(str::trim).filter(|l| !l.is_empty());
+    let mut named = false;
+    for line in lines.by_ref() {
+        if !UNKNOWN_PACKAGE_LINE.is_match(line) {
+            return false;
+        }
+        named |= line.starts_with("tlmgr: package ");
+    }
+    named
+}
+
 /// A `texlive.tlpdb.<md5>` copy under `tlpkg` (R `delete_tlpdb_files`).
 static HASHED_TLPDB: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^texlive[.]tlpdb.*[.][0-9a-f]{32}$").expect("valid regex"));
@@ -383,7 +407,13 @@ impl Tlmgr<'_> {
         let out = self.exec(&spec)?;
         // R reads the list whatever the status is: `tlmgr info` exits non-zero
         // when one of several packages is unknown, and still lists the rest.
-        if !out.status.success() && out.stdout.is_empty() {
+        // When none of them is known it lists nothing, so an empty list with a
+        // failing status is the answer for unknown packages, not a failure.
+        // Anything else on stderr is a real failure and stays an error.
+        if !out.status.success()
+            && out.stdout.is_empty()
+            && !only_unknown_packages(&String::from_utf8_lossy(&out.stderr))
+        {
             return Err(Self::command_error(&spec, &out));
         }
         Ok(String::from_utf8_lossy(&out.stdout)
