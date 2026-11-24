@@ -1,0 +1,4 @@
+You don't have permission to change the installation in any way,
+specifically, the directory <copy>/tlpkg/ is not writable.
+Please run this program as administrator, or contact your local admin.
+tlmgr: An error has occurred. See above messages. Exiting.

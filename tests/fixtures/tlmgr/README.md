@@ -46,6 +46,30 @@ files of the fixture.
 | `local-good` | the `pathrepo-good` install, with `REPO` written as a `file://` URL | Exit 0, `cannot find package fakegood.tar.(gz\|xz\|lz4)`, nothing installed |
 | `opt-repo-before`, `opt-repo-after` | `tlmgr option repository` before and after a call that used `--repository` | The saved value does not change |
 | `version` | `tlmgr --version` | Exit 0, a `version YYYY` line |
+| `search-older-remote` | `tlmgr search --file --global /ocgbase.sty` against the default repository (TeX Live 2026) from a 2025 tree | Exit 1, empty stdout, `Local TeX Live (2025) is older than remote repository (2026)` on stderr |
+| `update-self-older` | `tlmgr update --self --dry-run` against the same default repository | Exit 1, the same text |
+| `search-empty` | `tlmgr --repository FROZEN search --file --global /nosuchfile-zzqq.sty` | **Exit 0**, only the repository line on stdout: a search that finds nothing is a success |
+| `repo-missing` | `tlmgr --repository <missing path> --verify-repo none install lipsum` | Exit 1, `TLPDB: not a directory, not loading: <repo>`, `Cannot load TeX Live database` |
+| `download-unreachable` | the same with `--repository http://127.0.0.1:9/tlnet` | Exit 1, `TLPDB::from_file could not get texlive.tlpdb from: URL` (a real network failure) |
+| `update-self-unreachable` | `tlmgr --repository http://127.0.0.1:9/tlnet --verify-repo none update --self` | Exit 1, the same text: a failed `update --self` |
+| `install-readonly` | `tlmgr --repository FROZEN install lipsum` with every file under `tlpkg` made read-only | **Exit 2**, `You don't have permission to change the installation in any way`; checked before any download |
+| `install-tlmgr-outdated` | `tlmgr --repository <repo> --verify-repo none install fakegood`, where `<repo>` also holds a `texlive.infra` stanza at revision 99999 (the local one is 76780) | **Exit 255**, `tlmgr itself needs to be updated.` and `tlmgr: Terminating; please see warning above!` on stderr; nothing installed. The text is the same as in the crate CI log of 2026-11-24 (run 45471634024); the status is Perl's `die` default (`tlmgr.pl:3881`) |
+| `biber-lipo` | `biber --version` from the macOS 27 TinyTeX 2025 tree | **Exit 255**, empty stdout, `lipo` usage text and `biber: extracting arm64 binary with lipo failed (wstatus=256)` on stderr |
+
+The `install-tlmgr-outdated` repository is `make-corrupt-repo.sh` output with
+one stanza appended to `tlpkg/texlive.tlpdb`:
+
+```
+name texlive.infra
+category TLCore
+revision 99999
+shortdesc fake newer infra
+```
+
+and `tlpkg/texlive.tlpdb.sha512` recomputed. These nine were captured the same
+day, with `LANG` unset (no output is localized). `biber-lipo` ran from the real
+tree, read-only; the others ran in a `cp -a` copy. The `<home>` placeholder
+stands for the home directory.
 
 `FROZEN` is the frozen repository above. `REPO` is the local repository built by
 `make-corrupt-repo.sh` in this directory (`make-corrupt-repo.sh OUTDIR [YEAR]`).

@@ -1,0 +1,4 @@
+
+<copy>/bin/universal-darwin/tlmgr: TLPDB::from_file could not get texlive.tlpdb from: http://127.0.0.1:9/tlnet/tlpkg/texlive.tlpdb
+Maybe the repository setting should be changed.
+More info: https://tug.org/texlive/acquire.html

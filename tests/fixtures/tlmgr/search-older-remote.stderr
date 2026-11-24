@@ -1,0 +1,5 @@
+
+tlmgr: Local TeX Live (2025) is older than remote repository (2026).
+Cross release updates are only supported with
+  update-tlmgr-latest(.sh/.exe) --update
+See https://tug.org/texlive/upgrade.html for details.
