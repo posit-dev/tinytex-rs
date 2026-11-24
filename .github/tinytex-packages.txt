@@ -1,0 +1,6 @@
+latexmk
+xetex
+luatex
+bibtex
+makeindex
+natbib

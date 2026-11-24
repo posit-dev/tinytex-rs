@@ -656,6 +656,68 @@ fn info_returns_the_requested_fields_per_package() {
     );
 }
 
+/// What real `tlmgr info --only-installed` prints when the one package asked
+/// about is not installed: status 1, nothing on stdout, a complaint on stderr.
+const NOT_LOCALLY: &str = "tlmgr: package animate not locally!\n\
+     tlmgr: action info returned an error; continuing.\n\
+     tlmgr: An error has occurred. See above messages. Exiting.\n";
+
+#[test]
+fn info_of_one_unknown_package_is_an_empty_list() {
+    let d = dist("info-unknown");
+    let x = FakeTex::new();
+    x.reply("tlmgr", &["info"], Reply::code(1).stderr(NOT_LOCALLY));
+    let cfg = Config::default();
+    let rows = Tlmgr::new(&d, &cfg, &x, &NullObserver)
+        .info(&pkgs(&["animate"]), &["name"], true)
+        .unwrap();
+    assert!(rows.is_empty(), "{rows:?}");
+}
+
+#[test]
+fn info_of_unknown_packages_without_only_installed_is_also_an_empty_list() {
+    let d = dist("info-unknown-remote");
+    let x = FakeTex::new();
+    x.reply(
+        "tlmgr",
+        &["info"],
+        Reply::code(1).stderr(
+            "tlmgr: package nosuchpkg not found neither locally nor remote!\n\
+             tlmgr: action info returned an error; continuing.\n",
+        ),
+    );
+    let cfg = Config::default();
+    let rows = Tlmgr::new(&d, &cfg, &x, &NullObserver)
+        .info(&pkgs(&["nosuchpkg"]), &["name"], false)
+        .unwrap();
+    assert!(rows.is_empty(), "{rows:?}");
+}
+
+#[test]
+fn info_still_fails_when_tlmgr_fails_for_another_reason() {
+    let d = dist("info-broken");
+    let x = FakeTex::new();
+    x.reply(
+        "tlmgr",
+        &["info"],
+        Reply::code(1).stderr("tlmgr: cannot setup TLPDB in /nonexistent\n"),
+    );
+    let cfg = Config::default();
+    let err = Tlmgr::new(&d, &cfg, &x, &NullObserver)
+        .info(&pkgs(&["animate"]), &["name"], true)
+        .unwrap_err();
+    assert!(matches!(err, TlmgrError::Command { .. }), "{err:?}");
+}
+
+#[test]
+fn is_installed_is_false_for_a_package_tlmgr_does_not_know() {
+    let d = dist("is-installed");
+    let x = FakeTex::new();
+    x.reply("tlmgr", &["info"], Reply::code(1).stderr(NOT_LOCALLY));
+    let cfg = Config::default();
+    assert!(!Tlmgr::new(&d, &cfg, &x, &NullObserver).is_installed("animate"));
+}
+
 #[test]
 fn repository_returns_the_url() {
     let d = dist("repo");
@@ -716,7 +778,11 @@ fn packages_and_installs_for_a_log() {
 #[test]
 fn path_runs_tlmgr_path_or_writes_the_macos_paths_d_file() {
     let cfg = Config::default();
-    let d = dist("path");
+    let mut d = dist("path");
+    // A native Windows path: the AppleScript literal doubles its backslashes,
+    // so the check below must compare against the escaped form. Setting it
+    // here makes the test fail the same way on every platform.
+    d.bin_dir = std::path::PathBuf::from(r"C:\TinyTeX\bin\windows");
     let x = FakeTex::new();
     let t = Tlmgr::new(&d, &cfg, &x, &NullObserver);
     t.path_with(PathAction::Add, None).unwrap();
@@ -736,10 +802,9 @@ fn path_runs_tlmgr_path_or_writes_the_macos_paths_d_file() {
         .iter()
         .map(|a| a.to_string_lossy())
         .collect::<String>();
-    assert!(
-        script.contains(&d.bin_dir.to_string_lossy().into_owned()),
-        "{script}"
-    );
+    // The script is an AppleScript literal, which doubles backslashes.
+    let escaped = d.bin_dir.to_string_lossy().replace('\\', r"\\");
+    assert!(script.contains(&escaped), "{script}");
     assert!(script.contains("administrator privileges"), "{script}");
 
     // The file already holds the directory: nothing runs.

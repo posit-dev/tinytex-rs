@@ -1,0 +1,3 @@
+tlmgr: package repository <repo> (not verified: gpg unavailable)
+[1/1, ??:??/??:??] install: fakebad [1k]
+tlmgr: package log updated: <copy>/texmf-var/web2c/tlmgr.log

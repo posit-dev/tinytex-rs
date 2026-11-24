@@ -45,13 +45,27 @@ pub fn fake(model: &Arc<Model>) -> FakeTex {
             let _ = i;
             let installed = model.installed.lock().unwrap();
             let mut out = String::new();
+            let mut err = String::new();
             for p in pkgs {
                 if installed.contains(p) {
                     out.push_str(p);
                     out.push('\n');
+                } else {
+                    err.push_str(&format!("tlmgr: package {p} not locally!\n"));
                 }
             }
-            return Some(Reply::ok().stdout(out));
+            // Real `tlmgr info --only-installed` exits 1 whenever a requested
+            // package is not installed, whether or not it still lists the
+            // others (so an empty list with status 1 is the ordinary answer
+            // to "is this one installed?").
+            if err.is_empty() {
+                return Some(Reply::ok().stdout(out));
+            }
+            err.push_str(
+                "tlmgr: action info returned an error; continuing.\n\
+                 tlmgr: An error has occurred. See above messages. Exiting.\n",
+            );
+            return Some(Reply::code(1).stdout(out).stderr(err));
         }
         if let Some(i) = at("install") {
             let (code, installs) = model

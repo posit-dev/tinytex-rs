@@ -1,6 +1,11 @@
 //! One integration-test binary for the crate; each file is a `pub mod` below,
 //! alphabetized.
 
+pub mod cli_coverage;
+pub mod cli_errors;
+pub mod cli_json;
+pub mod cli_parity;
+pub mod cli_support;
 pub mod command;
 pub mod compile_engines;
 pub mod compile_errors;

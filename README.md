@@ -62,6 +62,50 @@ instead of taking the tools from `PATH`.
 | `config` | `Config`, read from the environment in one place |
 | `exec` | The `Exec` and `Observer` traits and the `StdExec` implementation |
 
+## The `tinytex` command
+
+With the `cli` feature the crate builds a `tinytex` program, a thin layer over
+the library for scripts and for programs in other languages. It needs no
+knowledge of any other tool: it compiles a LaTeX file to PDF and runs the
+`tlmgr` package manager of a TeX Live or TinyTeX installation.
+
+```text
+cargo install tinytex --features cli
+tinytex detect                          # where is TeX?
+tinytex compile paper.tex               # prints the path of paper.pdf
+tinytex compile --json paper.tex        # the result as JSON on stdout
+tinytex compile --pdf-engine xelatex --min 2 --max 11 paper.tex
+tinytex log paper.log                   # the errors and warnings in a log
+tinytex tlmgr install booktabs
+```
+
+Every flag of `compile` sets exactly one field of `CompileRequest` or
+`Config`; `--print-request` prints the pair the flags produce and exits, and
+`--request <file|->` reads a request from JSON. The directory of the `.tex`
+file is the working directory; there is no flag to change it. Without
+`--auto-install` or `--no-auto-install`, packages are installed when the
+distribution is writable.
+
+Standard output carries the result: the output path, or with `--json` an
+object `{"schema": 1, ...}`. Standard error carries progress (`--events json`
+prints one JSON object per line, with a `type` tag) and diagnostics. A JSON
+error is `{"schema": 1, "code": ..., "message": ...}`. Readers ignore unknown
+fields and unknown `type` values; removing or retyping a field bumps `schema`.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | success |
+| 1 | LaTeX failure (also a package install, bibliography, index, no-output or `tlmgr` failure) |
+| 2 | usage error or invalid request |
+| 3 | environment problem: no TeX installation, a tool not found, an I/O error |
+| 4 | cancelled, or the `--timeout` deadline passed |
+| 5 | the installed TeX Live is older than the remote repository |
+
+The `code` values are `no_tex_installation`, `engine_not_found`, `latex_error`,
+`package_install`, `texlive_too_old`, `bibliography`, `index`, `no_output`,
+`invalid_request`, `cancelled`, `io` and `tlmgr`. The JSON shape is
+unstable until the first tagged release that another project pins.
+
 ## Dependencies
 
 Normal dependencies are `serde` (with `derive`), `thiserror` and `regex`. The
