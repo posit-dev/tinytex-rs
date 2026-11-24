@@ -118,6 +118,11 @@ jobs:
           # saved repository is fine here.
           repo=$(sh .github/scripts/tinytex-repository.sh)
           if [ -n "$repo" ]; then tlmgr option repository "$repo"; fi
+          # The bundle's saved repository can serve a newer tlmgr than the
+          # one in the bundle, and tlmgr then refuses every install with
+          # "tlmgr itself needs to be updated". Update it first, after the
+          # repository choice above (a frozen repository must be set first).
+          tlmgr update --self
           # The real-TeX tests need these tools; TinyTeX-1 may not ship them
           # all. The script checks that every one landed (a corrupt download
           # exits 0) and fails the job otherwise, before the cache is saved.

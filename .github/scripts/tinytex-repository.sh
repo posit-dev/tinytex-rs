@@ -31,15 +31,22 @@ installed=$(tlmgr --version 2>&1 | sed -n 's/^TeX Live .* version \([0-9][0-9][0
 # The first stanza of the repository's database is `00texlive.config`, whose
 # `depend release/YYYY` line names the year it serves. Read only the head of
 # the compressed file.
-current=$(python3 -I - "$default_repo" <<'PY'
-import lzma, re, sys, urllib.request
+# curl, not Python's urllib: the system Python on some runners cannot verify
+# the certificates of the mirror that the redirector picks.
+head_file=$(mktemp)
+trap 'rm -f "$head_file"' EXIT
+curl -fsSL --retry 3 --max-time 120 -r 0-65535 \
+  "${default_repo%/}/tlpkg/texlive.tlpdb.xz" -o "$head_file" ||
+  fail "cannot download the repository database from $default_repo"
+# A server that ignores the range sends the whole file; only the head is read.
+current=$(python3 -I - "$head_file" <<'PY'
+import lzma, re, sys
 
-url = sys.argv[1].rstrip("/") + "/tlpkg/texlive.tlpdb.xz"
-with urllib.request.urlopen(url, timeout=60) as response:
-    head = lzma.LZMADecompressor().decompress(response.read(65536))
+with open(sys.argv[1], "rb") as f:
+    head = lzma.LZMADecompressor().decompress(f.read(65536))
 m = re.search(r"^depend release/(\d{4})$", head.decode("utf-8", "replace"), re.M)
 if not m:
-    sys.exit("no 'depend release/YYYY' line in " + url)
+    sys.exit("no 'depend release/YYYY' line in the repository database")
 print(m.group(1))
 PY
 ) || fail "cannot read the current TeX Live year from $default_repo"
