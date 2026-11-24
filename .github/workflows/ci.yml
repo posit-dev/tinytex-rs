@@ -24,7 +24,7 @@ jobs:
           components: clippy
       - uses: taiki-e/install-action@nextest
       - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo nextest run --all-features
+      - run: cargo nextest run --all-features --no-fail-fast
       # nextest does not run doc tests; the README example is one.
       - run: cargo test --doc --all-features
 
@@ -41,7 +41,7 @@ jobs:
           components: clippy
       - uses: taiki-e/install-action@nextest
       - run: cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo nextest run --all-features
+      - run: cargo nextest run --all-features --no-fail-fast
 
   msrv:
     name: rust-version (1.94)
@@ -146,4 +146,4 @@ jobs:
             ~/Library/TinyTeX
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
-      - run: cargo nextest run --all-features
+      - run: cargo nextest run --all-features --no-fail-fast
