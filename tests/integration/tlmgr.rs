@@ -778,7 +778,11 @@ fn packages_and_installs_for_a_log() {
 #[test]
 fn path_runs_tlmgr_path_or_writes_the_macos_paths_d_file() {
     let cfg = Config::default();
-    let d = dist("path");
+    let mut d = dist("path");
+    // A native Windows path: the AppleScript literal doubles its backslashes,
+    // so the check below must compare against the escaped form. Setting it
+    // here makes the test fail the same way on every platform.
+    d.bin_dir = std::path::PathBuf::from(r"C:\TinyTeX\bin\windows");
     let x = FakeTex::new();
     let t = Tlmgr::new(&d, &cfg, &x, &NullObserver);
     t.path_with(PathAction::Add, None).unwrap();
@@ -798,10 +802,9 @@ fn path_runs_tlmgr_path_or_writes_the_macos_paths_d_file() {
         .iter()
         .map(|a| a.to_string_lossy())
         .collect::<String>();
-    assert!(
-        script.contains(&d.bin_dir.to_string_lossy().into_owned()),
-        "{script}"
-    );
+    // The script is an AppleScript literal, which doubles backslashes.
+    let escaped = d.bin_dir.to_string_lossy().replace('\\', r"\\");
+    assert!(script.contains(&escaped), "{script}");
     assert!(script.contains("administrator privileges"), "{script}");
 
     // The file already holds the directory: nothing runs.
