@@ -22,6 +22,7 @@ pub mod exec;
 pub mod fake_tex;
 pub mod log;
 pub mod real_tex;
+pub mod sandbox_script;
 pub mod smoke;
 pub mod tlmgr;
 pub mod tlmgr_cancel;
