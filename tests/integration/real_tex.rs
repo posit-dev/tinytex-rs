@@ -306,10 +306,48 @@ fn auto_install_recovers_from_a_missing_package() {
     let Some(d) = distribution("auto_install", &["pdflatex", "tlmgr"]) else {
         return;
     };
+    // Start from a tree without `lipsum`, so the test cannot pass on one that
+    // already has it. This runs only in CI, where the runner is disposable.
+    // `tlmgr remove` exits 1 when the package is absent, which is fine here.
+    let removed = std::process::Command::new(d.bin_dir.join("tlmgr"))
+        .args(["remove", "lipsum"])
+        .output()
+        .expect("run tlmgr remove");
+    assert!(
+        matches!(removed.status.code(), Some(0 | 1)),
+        "tlmgr remove lipsum: {:?}\n{}",
+        removed.status,
+        String::from_utf8_lossy(&removed.stderr)
+    );
+    assert!(
+        kpsewhich(&d, "lipsum.sty").is_empty(),
+        "lipsum.sty must be absent before the compile"
+    );
+
     let p = Project::new(
         "\\documentclass{article}\\usepackage{lipsum}\\begin{document}\\lipsum[1]\\end{document}\n",
     );
     let req = CompileRequest::new().auto_install(true);
-    let c = compile(d, &p, &req).unwrap();
+    let c = compile(d.clone(), &p, &req).unwrap();
     pdf_ok(&c.pdf);
+    // Two independent signals that the package landed: the compile reports
+    // it, and the tree now holds it.
+    assert!(
+        c.installed_packages.iter().any(|n| n == "lipsum"),
+        "installed_packages: {:?}",
+        c.installed_packages
+    );
+    assert!(
+        !kpsewhich(&d, "lipsum.sty").is_empty(),
+        "kpsewhich finds lipsum.sty after the install"
+    );
+}
+
+/// The path `kpsewhich` prints for `file`, or an empty string when it finds none.
+fn kpsewhich(d: &Distribution, file: &str) -> String {
+    let out = std::process::Command::new(d.bin_dir.join("kpsewhich"))
+        .arg(file)
+        .output()
+        .expect("run kpsewhich");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
