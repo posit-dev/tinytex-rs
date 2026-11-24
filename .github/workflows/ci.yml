@@ -70,8 +70,11 @@ jobs:
       TINYTEX_RS_REQUIRE_TEX: "1"
       # The release of rstudio/tinytex-releases that R's install script
       # downloads (the script wants the version without the `v`), and the
-      # installer bundle. Keep in step with q2's pin (TINYTEX_VERSION in
-      # quarto-dev/q2 .github/workflows/test-suite.yml, plan 6.1).
+      # installer bundle. The version tracks q2's pin (TINYTEX_VERSION in
+      # quarto-dev/q2 .github/workflows/test-suite.yml, plan 6.1). The install
+      # method does not: this job installs the prebuilt `TinyTeX-1` bundle with
+      # R's script and adds the packages in .github/tinytex-packages.txt, while
+      # q2 installs `TinyTeX-0` plus its own package list.
       TINYTEX_VERSION: "2026.11"
       TINYTEX_INSTALLER: "TinyTeX-1"
       # R's install script at the commit the crate follows (`7818777` of
@@ -84,8 +87,9 @@ jobs:
 
       # Restored on every run, saved only right after a fresh install and
       # before any test: the auto-install tests change the tree and must never
-      # mutate what the cache stores. The key covers the pin and the package
-      # list below.
+      # mutate what the cache stores. The key covers the pin, the installer
+      # script, and the hashes of the package list and of the two scripts that
+      # build the tree.
       - name: Restore TinyTeX cache
         id: cache
         uses: actions/cache/restore@v4
@@ -93,7 +97,7 @@ jobs:
           path: |
             ~/.TinyTeX
             ~/Library/TinyTeX
-          key: tinytex-${{ runner.os }}-${{ runner.arch }}-${{ env.TINYTEX_VERSION }}-${{ env.TINYTEX_INSTALLER }}-latexmk-xetex-luatex-bibtex-makeindex-natbib
+          key: tinytex-${{ runner.os }}-${{ runner.arch }}-${{ env.TINYTEX_VERSION }}-${{ env.TINYTEX_INSTALLER }}-${{ env.TINYTEX_SCRIPT_SHA }}-${{ hashFiles('.github/tinytex-packages.txt', '.github/scripts/tinytex-repository.sh', '.github/scripts/tinytex-install-packages.sh') }}
 
       - name: Install TinyTeX
         if: steps.cache.outputs.cache-hit != 'true'
@@ -101,11 +105,23 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL "https://raw.githubusercontent.com/rstudio/tinytex/${TINYTEX_SCRIPT_SHA}/tools/install-bin-unix.sh" -o install-bin-unix.sh
-          sh install-bin-unix.sh --no-path
+          # The script's first argument is the directory it moves the
+          # downloaded installer into, so a bare `--no-path` would run
+          # `mv ... --no-path/`. It finds `--no-path` by scanning all its
+          # arguments, so pass an empty first one.
+          sh install-bin-unix.sh "" --no-path
           if [ "$RUNNER_OS" = "Linux" ]; then root="$HOME/.TinyTeX"; else root="$HOME/Library/TinyTeX"; fi
           export PATH="$(ls -d "$root"/bin/*/ | head -1):$PATH"
-          # The real-TeX tests need these tools; TinyTeX-1 may not ship them all.
-          tlmgr install latexmk xetex luatex bibtex makeindex natbib
+          # A TinyTeX of an older TeX Live year cannot use the default
+          # repository (tlmgr refuses a newer one), so point it at the frozen
+          # archive for its year. This runner is disposable, so changing the
+          # saved repository is fine here.
+          repo=$(sh .github/scripts/tinytex-repository.sh)
+          if [ -n "$repo" ]; then tlmgr option repository "$repo"; fi
+          # The real-TeX tests need these tools; TinyTeX-1 may not ship them
+          # all. The script checks that every one landed (a corrupt download
+          # exits 0) and fails the job otherwise, before the cache is saved.
+          sh .github/scripts/tinytex-install-packages.sh .github/tinytex-packages.txt
           du -sh "$root"
 
       - name: Put TinyTeX on PATH and smoke-check it
