@@ -18,4 +18,7 @@ the `tinytex` command-line binary (`cli` feature): `compile`, `detect`,
   says an unknown package only leaves its row out. `info` now returns an empty list when
   `tlmgr` says only that the packages are unknown, and still returns an error for any other
   complaint. The mocked `tlmgr` in the tests now answers like the real one, which is why the
-  install tests had not caught this.
+  install tests had not caught this. This rule is provisional: it accepts only three known
+  stderr sentences, so a locale warning defeats it. The 0.2.0 release replaces it with a typed
+  `info` result that reports "unknown" only on positive evidence (exit status 1, empty stdout,
+  and every requested name in a `package NAME not locally!` line), and rewrites this entry.

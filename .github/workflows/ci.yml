@@ -151,4 +151,24 @@ jobs:
             ~/Library/TinyTeX
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
+      # The tests that install or remove packages (`auto_install_`, and the
+      # repository calls of the conformance tests) must never run against the
+      # tree the cache stores, so they run against a copy. The cache was saved
+      # above, before this step. The copy is a direct child of $RUNNER_TEMP, so
+      # it is outside the default install directories, and the gate in
+      # tests/integration/sandbox.rs refuses anything else. TINYTEX_DIR and the
+      # nonce are exported only after the install steps (the installer script
+      # reads TINYTEX_DIR as the parent of `.TinyTeX`, the crate as the root).
+      # GITHUB_PATH entries are prepended, so the copy's bin comes first.
+      - name: Copy TinyTeX to a disposable tree for the tests that mutate it
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then root="$HOME/.TinyTeX"; else root="$HOME/Library/TinyTeX"; fi
+          sh scripts/tex-sandbox.sh create "$root" > "$RUNNER_TEMP/sandbox.env"
+          cat "$RUNNER_TEMP/sandbox.env" >> "$GITHUB_ENV"
+          copy=$(sed -n 's/^TINYTEX_DIR=//p' "$RUNNER_TEMP/sandbox.env")
+          ls -d "$copy"/bin/*/ | head -1 >> "$GITHUB_PATH"
+          echo "TINYTEX_RS_REQUIRE_SANDBOX=1" >> "$GITHUB_ENV"
+
       - run: cargo nextest run --all-features --no-fail-fast

@@ -1,0 +1,16 @@
+usage: lipo <input_file> <command> [<options> ...]
+  command is one of:
+    -create[_album]
+    -info
+    -detailed_info
+    -thin <arch>
+    -extract <arch> [-extract <arch> ...]
+    -remove <arch> [-remove <arch> ...]
+    -replace <arch> <file_name> [-replace <arch> <file_name> ...]
+    -verify_arch <arch> ...
+    -archs
+  options are one or more of:
+    -arch <arch> <input_file>
+    -o <output_file>
+    -segalign <arch> <alignment>
+biber: extracting arm64 binary with lipo failed (wstatus=256)

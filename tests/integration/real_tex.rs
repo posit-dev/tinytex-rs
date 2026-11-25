@@ -3,9 +3,13 @@
 //! Each test skips with a visible message when no distribution is found,
 //! unless `TINYTEX_RS_REQUIRE_TEX=1` (the crate's TinyTeX CI job sets it), in
 //! which case a missing distribution fails the test: a broken CI install must
-//! not pass as green. The tests whose names start with `auto_install_` remove
-//! nothing and install into the distribution, so they run only under that
-//! variable too; on a developer machine they skip.
+//! not pass as green.
+//!
+//! The tests whose names start with `auto_install_` remove and install
+//! packages, so they never run against the distribution `find` returns. They
+//! run only inside a disposable copy that passes the gate of `sandbox` (build
+//! one with `scripts/tex-sandbox.sh`; CI does). `TINYTEX_RS_REQUIRE_TEX` is not
+//! permission to mutate a tree: a developer who sets it still skips them.
 
 #![allow(clippy::result_large_err)] // `CompileError` is large by design (see `compile`).
 
@@ -16,6 +20,8 @@ use tinytex::{
     Bib, Clean, CompileError, CompileRequest, Compiled, Compiler, Config, Distribution, Driver,
     Engine, KeepLog, NullObserver, StdExec,
 };
+
+use super::sandbox::{self, Sandbox};
 
 fn required() -> bool {
     std::env::var("TINYTEX_RS_REQUIRE_TEX").is_ok_and(|v| v == "1")
@@ -294,24 +300,19 @@ fn a_stale_pdf_does_not_hide_a_failed_build() {
     assert!(!p.exists("doc.pdf"));
 }
 
-/// Needs a package TinyTeX does not ship; installs it. CI only.
+/// Needs a package TinyTeX does not ship; installs it. Runs only inside a
+/// disposable copy (see the module comment).
 #[test]
 fn auto_install_recovers_from_a_missing_package() {
-    if !required() {
-        eprintln!(
-            "SKIPPED auto_install_recovers_from_a_missing_package: installs into the distribution; set TINYTEX_RS_REQUIRE_TEX=1 (CI)"
-        );
-        return;
-    }
-    let Some(d) = distribution("auto_install", &["pdflatex", "tlmgr"]) else {
+    let Some(sb) = sandbox::gate("auto_install_recovers_from_a_missing_package") else {
         return;
     };
+    let d = sb.dist.clone();
     // Start from a tree without `lipsum`, so the test cannot pass on one that
-    // already has it. This runs only in CI, where the runner is disposable.
-    // `tlmgr remove` exits 1 when the package is absent, which is fine here.
-    let removed = std::process::Command::new(d.bin_dir.join("tlmgr"))
-        .args(["remove", "lipsum"])
-        .output()
+    // already has it. `tlmgr remove` exits 1 when the package is absent, which
+    // is fine here.
+    let removed = sb
+        .run("tlmgr", &["remove", "lipsum"])
         .expect("run tlmgr remove");
     assert!(
         matches!(removed.status.code(), Some(0 | 1)),
@@ -320,7 +321,7 @@ fn auto_install_recovers_from_a_missing_package() {
         String::from_utf8_lossy(&removed.stderr)
     );
     assert!(
-        kpsewhich(&d, "lipsum.sty").is_empty(),
+        kpsewhich(&sb, "lipsum.sty").is_empty(),
         "lipsum.sty must be absent before the compile"
     );
 
@@ -328,7 +329,9 @@ fn auto_install_recovers_from_a_missing_package() {
         "\\documentclass{article}\\usepackage{lipsum}\\begin{document}\\lipsum[1]\\end{document}\n",
     );
     let req = CompileRequest::new().auto_install(true);
-    let c = compile(d.clone(), &p, &req).unwrap();
+    let c = Compiler::new(Some(d), Config::default())
+        .compile(&p.tex(), &req, sb.exec(), &NullObserver)
+        .unwrap();
     pdf_ok(&c.pdf);
     // Two independent signals that the package landed: the compile reports
     // it, and the tree now holds it.
@@ -338,16 +341,13 @@ fn auto_install_recovers_from_a_missing_package() {
         c.installed_packages
     );
     assert!(
-        !kpsewhich(&d, "lipsum.sty").is_empty(),
+        !kpsewhich(&sb, "lipsum.sty").is_empty(),
         "kpsewhich finds lipsum.sty after the install"
     );
 }
 
 /// The path `kpsewhich` prints for `file`, or an empty string when it finds none.
-fn kpsewhich(d: &Distribution, file: &str) -> String {
-    let out = std::process::Command::new(d.bin_dir.join("kpsewhich"))
-        .arg(file)
-        .output()
-        .expect("run kpsewhich");
+fn kpsewhich(sb: &Sandbox, file: &str) -> String {
+    let out = sb.run("kpsewhich", &[file]).expect("run kpsewhich");
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
