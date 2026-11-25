@@ -190,7 +190,7 @@ jobs:
       - name: Install TinyTeX and capture the first install
         shell: bash
         run: |
-          set -uo pipefail
+          set +e -u
           curl -fsSL "https://raw.githubusercontent.com/rstudio/tinytex/${TINYTEX_SCRIPT_SHA}/tools/install-bin-unix.sh" -o install-bin-unix.sh
           out="$RUNNER_TEMP/capture"; mkdir -p "$out"
           # The script's own last `tlmgr` calls (line 138, `postaction`) can
@@ -212,7 +212,8 @@ jobs:
           LC_ALL=C tlmgr update --self --dry-run > "$out/update-self-dry.stdout" 2> "$out/update-self-dry.stderr" || true
           head -50 "$out"/*
           echo "CAPTURE_DIR=$out" >> "$GITHUB_ENV"
-      - uses: actions/upload-artifact@v4
+      - if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: install-tlmgr-outdated
           path: ${{ env.CAPTURE_DIR }}
