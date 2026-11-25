@@ -53,21 +53,11 @@ files of the fixture.
 | `download-unreachable` | the same with `--repository http://127.0.0.1:9/tlnet` | Exit 1, `TLPDB::from_file could not get texlive.tlpdb from: URL` (a real network failure) |
 | `update-self-unreachable` | `tlmgr --repository http://127.0.0.1:9/tlnet --verify-repo none update --self` | Exit 1, the same text: a failed `update --self` |
 | `install-readonly` | `tlmgr --repository FROZEN install lipsum` with every file under `tlpkg` made read-only | **Exit 2**, `You don't have permission to change the installation in any way`; checked before any download |
-| `install-tlmgr-outdated` | `tlmgr --repository <repo> --verify-repo none install fakegood`, where `<repo>` also holds a `texlive.infra` stanza at revision 99999 (the local one is 76780) | **Exit 255**, `tlmgr itself needs to be updated.` and `tlmgr: Terminating; please see warning above!` on stderr; nothing installed. The text is the same as in the crate CI log of 2026-11-24 (run 45471634024); the status is Perl's `die` default (`tlmgr.pl:3881`) |
+| `install-tlmgr-outdated` | `tlmgr install animate` on a fresh `TinyTeX-1` bundle (tlmgr revision 80658, TeX Live 2026) before `tlmgr update --self`, captured in CI (run 45543204850, 2026-11-25, `ubuntu-latest`); its repository is the bundle's saved `https://tlnet.yihui.org`, shown as `<repo>`. A dry-run `update --self` afterward shows `texlive.infra (80683 -> 80721)` | **Exit 255**, `tlmgr itself needs to be updated.` and `tlmgr: Terminating; please see warning above!` on stderr; nothing installed. Replaces an earlier fixture built from a doctored repository; its text was identical. The status is Perl's `die` default (`tlmgr.pl:3881`) |
 | `biber-lipo` | `biber --version` from the macOS 27 TinyTeX 2025 tree | **Exit 255**, empty stdout, `lipo` usage text and `biber: extracting arm64 binary with lipo failed (wstatus=256)` on stderr |
 
-The `install-tlmgr-outdated` repository is `make-corrupt-repo.sh` output with
-one stanza appended to `tlpkg/texlive.tlpdb`:
-
-```
-name texlive.infra
-category TLCore
-revision 99999
-shortdesc fake newer infra
-```
-
-and `tlpkg/texlive.tlpdb.sha512` recomputed. These nine were captured the same
-day, with `LANG` unset (no output is localized). `biber-lipo` ran from the real
+The earlier doctored-repository recipe for `install-tlmgr-outdated` (a `texlive.infra` stanza at revision 99999) is gone: the fixture is now a real capture. Eight of these nine were captured on 2026-11-24 with `LANG` unset (no output is
+localized); `install-tlmgr-outdated` came from CI on 2026-11-25 with `LC_ALL=C`. `biber-lipo` ran from the real
 tree, read-only; the others ran in a `cp -a` copy. The `<home>` placeholder
 stands for the home directory.
 
